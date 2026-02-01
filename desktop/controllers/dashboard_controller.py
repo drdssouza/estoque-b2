@@ -14,15 +14,16 @@ class DashboardController(QObject):
         products_df = self.data_loader.load_products()
         movements_df = self.data_loader.load_movements()
         
-        # FILTRAR APENAS PRODUTOS ATIVOS
+        # Filtrar apenas produtos ativos
         active_products = products_df[products_df['active'] == True]
         
         total_products = len(active_products)
         total_bebidas = len(active_products[active_products['category'] == 'bebida'])
         total_doces = len(active_products[active_products['category'] == 'doce'])
         total_chips = len(active_products[active_products['category'] == 'salgado'])
+        total_acessorios = len(active_products[active_products['category'] == 'acessorios'])
         
-        # Estoque baixo - APENAS PRODUTOS ATIVOS
+        # Estoque baixo — apenas produtos ativos
         low_stock = active_products[active_products['current_stock'] <= active_products['minimum_stock']]
         low_stock_count = len(low_stock)
         
@@ -33,7 +34,7 @@ class DashboardController(QObject):
         else:
             recent_movements = movements_df
         
-        # Filtrar movimentações apenas de produtos ATIVOS
+        # Filtrar movimentações apenas de produtos ativos
         if len(recent_movements) > 0:
             active_product_ids = active_products['id'].tolist()
             recent_movements = recent_movements[recent_movements['product_id'].isin(active_product_ids)]
@@ -45,7 +46,6 @@ class DashboardController(QObject):
         if len(recent_movements) > 0:
             top_products = recent_movements.groupby('product_id').size().sort_values(ascending=False).head(5)
             for product_id, count in top_products.items():
-                # Verificar se o produto ainda está ativo
                 product = active_products[active_products['id'] == product_id]
                 if len(product) > 0:
                     top_products_data.append({
@@ -58,6 +58,7 @@ class DashboardController(QObject):
             'total_bebidas': total_bebidas,
             'total_doces': total_doces,
             'total_salgado': total_chips,
+            'total_acessorios': total_acessorios,
             'low_stock_count': low_stock_count,
             'low_stock_items': low_stock.to_dict(orient='records'),
             'entries_7days': entries,

@@ -52,6 +52,12 @@ class OrdersController(QObject):
             self.orders_updated.emit()
         return success
 
+    def update_item_quantity(self, item_id, new_quantity):
+        success = self.data_loader.update_order_item_quantity(item_id, new_quantity)
+        if success:
+            self.orders_updated.emit()
+        return success
+
     def close_order(self, order_id):
         self.data_loader.close_order(order_id)
         self.orders_updated.emit()

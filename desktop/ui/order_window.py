@@ -8,6 +8,26 @@ from desktop.controllers.products_controller import ProductsController
 from functools import partial
 
 
+def show_question_message(parent, title, message):
+    msg = QMessageBox(parent)
+    msg.setIcon(QMessageBox.Question)
+    msg.setWindowTitle(title)
+    msg.setText(message)
+    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+    msg.setStyleSheet("""
+        QMessageBox { background-color: #ecf0f1; }
+        QMessageBox QLabel {
+            color: #2c3e50; font-size: 14px; font-weight: bold; min-width: 300px;
+        }
+        QPushButton {
+            background-color: #3498db; color: white; padding: 8px 20px;
+            border-radius: 4px; font-size: 13px; font-weight: bold; min-width: 80px;
+        }
+        QPushButton:hover { background-color: #2980b9; }
+    """)
+    return msg.exec()
+
+
 class OrdersWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -36,16 +56,11 @@ class OrdersWindow(QWidget):
         btn_new = QPushButton("+ Nova Comanda")
         btn_new.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                font-size: 16px;
-                padding: 10px 20px;
-                border-radius: 5px;
-                font-weight: bold;
+                background-color: #27ae60; color: white;
+                font-size: 16px; padding: 10px 20px;
+                border-radius: 5px; font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #229954;
-            }
+            QPushButton:hover { background-color: #229954; }
         """)
         btn_new.clicked.connect(self.create_new_order)
         header_layout.addWidget(btn_new)
@@ -59,12 +74,9 @@ class OrdersWindow(QWidget):
         self.search_input.setPlaceholderText("Buscar por nome do cliente...")
         self.search_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                font-size: 14px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                background-color: white;
-                color: #2c3e50;
+                padding: 10px; font-size: 14px;
+                border: 2px solid #bdc3c7; border-radius: 5px;
+                background-color: white; color: #2c3e50;
             }
         """)
         self.search_input.textChanged.connect(self.load_orders)
@@ -74,12 +86,9 @@ class OrdersWindow(QWidget):
         self.status_filter.addItems(["Todas", "aberta", "fechada"])
         self.status_filter.setStyleSheet("""
             QComboBox {
-                padding: 10px;
-                font-size: 14px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                background-color: white;
-                color: #2c3e50;
+                padding: 10px; font-size: 14px;
+                border: 2px solid #bdc3c7; border-radius: 5px;
+                background-color: white; color: #2c3e50;
             }
         """)
         self.status_filter.currentTextChanged.connect(self.load_orders)
@@ -95,23 +104,16 @@ class OrdersWindow(QWidget):
         ])
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
-                border: none;
-                font-size: 14px;
-                color: #2c3e50;
+                background-color: white; border: none;
+                font-size: 14px; color: #2c3e50;
             }
             QHeaderView::section {
-                background-color: #34495e;
-                color: white;
-                padding: 10px;
-                font-weight: bold;
-                border: none;
-                font-size: 13px;
+                background-color: #34495e; color: white;
+                padding: 10px; font-weight: bold;
+                border: none; font-size: 13px;
             }
             QTableWidget::item {
-                color: #2c3e50;
-                padding: 8px;
-                font-size: 13px;
+                color: #2c3e50; padding: 8px; font-size: 13px;
             }
         """)
         self.table.horizontalHeader().setStretchLastSection(False)
@@ -135,35 +137,26 @@ class OrdersWindow(QWidget):
         self.table.setRowCount(len(orders))
 
         for row, order in enumerate(orders):
-            # ID
             item_id = QTableWidgetItem(str(order['id']))
             item_id.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 0, item_id)
 
-            # Cliente
             self.table.setItem(row, 1, QTableWidgetItem(order['customer_name']))
 
-            # Status
             status_text = "ABERTA" if order['status'] == 'aberta' else "FECHADA"
             status_item = QTableWidgetItem(status_text)
             status_item.setTextAlignment(Qt.AlignCenter)
             font = status_item.font()
             font.setBold(True)
             status_item.setFont(font)
-            if order['status'] == 'aberta':
-                status_item.setForeground(Qt.darkGreen)
-            else:
-                status_item.setForeground(Qt.darkRed)
+            status_item.setForeground(Qt.darkGreen if order['status'] == 'aberta' else Qt.darkRed)
             self.table.setItem(row, 2, status_item)
 
-            # Total
             total_item = QTableWidgetItem(f"R$ {order['total']:.2f}")
             total_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 3, total_item)
 
-            # Horário
             try:
-                from datetime import datetime as dt
                 import pandas as pd
                 created = pd.to_datetime(order['created_at'])
                 horario = created.strftime('%H:%M:%S')
@@ -185,13 +178,9 @@ class OrdersWindow(QWidget):
             btn_detail.setCursor(Qt.PointingHandCursor)
             btn_detail.setStyleSheet("""
                 QPushButton {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 6px 10px;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    border: none;
+                    background-color: #3498db; color: white;
+                    padding: 6px 10px; border-radius: 4px;
+                    font-size: 12px; font-weight: bold; border: none;
                 }
                 QPushButton:hover { background-color: #2980b9; }
             """)
@@ -205,13 +194,9 @@ class OrdersWindow(QWidget):
                 btn_close.setCursor(Qt.PointingHandCursor)
                 btn_close.setStyleSheet("""
                     QPushButton {
-                        background-color: #27ae60;
-                        color: white;
-                        padding: 6px 10px;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: bold;
-                        border: none;
+                        background-color: #27ae60; color: white;
+                        padding: 6px 10px; border-radius: 4px;
+                        font-size: 12px; font-weight: bold; border: none;
                     }
                     QPushButton:hover { background-color: #229954; }
                 """)
@@ -224,13 +209,9 @@ class OrdersWindow(QWidget):
                 btn_delete.setCursor(Qt.PointingHandCursor)
                 btn_delete.setStyleSheet("""
                     QPushButton {
-                        background-color: #e74c3c;
-                        color: white;
-                        padding: 6px 10px;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: bold;
-                        border: none;
+                        background-color: #e74c3c; color: white;
+                        padding: 6px 10px; border-radius: 4px;
+                        font-size: 12px; font-weight: bold; border: none;
                     }
                     QPushButton:hover { background-color: #c0392b; }
                 """)
@@ -247,7 +228,6 @@ class OrdersWindow(QWidget):
             customer_name = dialog.get_customer_name()
             if customer_name.strip():
                 order_id = self.orders_controller.create_order(customer_name.strip())
-                # Abrir detalhes imediatamente
                 order = {'id': order_id, 'customer_name': customer_name.strip(), 'status': 'aberta', 'total': 0.0}
                 self.show_order_detail(order)
 
@@ -257,25 +237,22 @@ class OrdersWindow(QWidget):
         self.load_orders()
 
     def close_order(self, order_id):
-        # Verificar se a comanda tem itens
         items = self.orders_controller.get_order_items(order_id)
         if len(items) == 0:
             QMessageBox.warning(self, "Aviso", "A comanda não possui itens.\nAdicione pelo menos um item antes de fechar.")
             return
 
-        reply = QMessageBox.question(
+        reply = show_question_message(
             self, 'Confirmação',
-            'Fechar esta comanda?\n\nOs itens serão descontados do estoque automaticamente.',
-            QMessageBox.Yes | QMessageBox.No
+            'Fechar esta comanda?\n\nOs itens serão descontados do estoque automaticamente.'
         )
         if reply == QMessageBox.Yes:
             self.orders_controller.close_order(order_id)
 
     def delete_order(self, order_id):
-        reply = QMessageBox.question(
+        reply = show_question_message(
             self, 'Confirmação',
-            'Excluir esta comanda e todos os seus itens?',
-            QMessageBox.Yes | QMessageBox.No
+            'Excluir esta comanda e todos os seus itens?'
         )
         if reply == QMessageBox.Yes:
             self.orders_controller.delete_order(order_id)
@@ -309,29 +286,24 @@ class NewOrderDialog(QDialog):
         self.name_input.setPlaceholderText("Ex: João Silva")
         self.name_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                font-size: 15px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                background-color: white;
-                color: #2c3e50;
+                padding: 10px; font-size: 15px;
+                border: 2px solid #bdc3c7; border-radius: 5px;
+                background-color: white; color: #2c3e50;
             }
             QLineEdit:focus { border: 2px solid #3498db; }
         """)
         layout.addWidget(self.name_input)
 
         buttons = QHBoxLayout()
+
         btn_create = QPushButton("Criar Comanda")
         btn_create.setFixedHeight(42)
         btn_create.setCursor(Qt.PointingHandCursor)
         btn_create.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                padding: 10px 25px;
-                border-radius: 5px;
-                font-size: 15px;
-                font-weight: bold;
+                background-color: #27ae60; color: white;
+                padding: 10px 25px; border-radius: 5px;
+                font-size: 15px; font-weight: bold;
             }
             QPushButton:hover { background-color: #229954; }
         """)
@@ -343,12 +315,9 @@ class NewOrderDialog(QDialog):
         btn_cancel.setCursor(Qt.PointingHandCursor)
         btn_cancel.setStyleSheet("""
             QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                padding: 10px 25px;
-                border-radius: 5px;
-                font-size: 15px;
-                font-weight: bold;
+                background-color: #95a5a6; color: white;
+                padding: 10px 25px; border-radius: 5px;
+                font-size: 15px; font-weight: bold;
             }
             QPushButton:hover { background-color: #7f8c8d; }
         """)
@@ -369,7 +338,7 @@ class OrderDetailDialog(QDialog):
         self.products_controller = products_controller
         self.setWindowTitle(f"Comanda #{order['id']} - {order['customer_name']}")
         self.setModal(True)
-        self.setMinimumWidth(600)
+        self.setMinimumWidth(620)
         self.setMinimumHeight(500)
         self.setup_ui()
         self.load_items()
@@ -379,7 +348,7 @@ class OrderDetailDialog(QDialog):
         layout.setContentsMargins(25, 20, 25, 20)
         layout.setSpacing(12)
 
-        # ── Header info ──
+        # ── Header ──
         info_frame = QFrame()
         info_frame.setStyleSheet("background-color: #34495e; border-radius: 8px; padding: 12px;")
         info_layout = QHBoxLayout(info_frame)
@@ -407,12 +376,9 @@ class OrderDetailDialog(QDialog):
             self.product_combo = QComboBox()
             self.product_combo.setStyleSheet("""
                 QComboBox {
-                    padding: 8px;
-                    font-size: 13px;
-                    border: 2px solid #bdc3c7;
-                    border-radius: 4px;
-                    background-color: white;
-                    color: #2c3e50;
+                    padding: 8px; font-size: 13px;
+                    border: 2px solid #bdc3c7; border-radius: 4px;
+                    background-color: white; color: #2c3e50;
                 }
             """)
             products = self.products_controller.get_all_products()
@@ -421,35 +387,14 @@ class OrderDetailDialog(QDialog):
                     self.product_combo.addItem(f"{p['name']} - R$ {p['sale_price']:.2f}", p['id'])
             add_layout.addWidget(self.product_combo)
 
-            self.qty_input = QSpinBox()
-            self.qty_input.setMinimum(1)
-            self.qty_input.setMaximum(999)
-            self.qty_input.setValue(1)
-            self.qty_input.setFixedWidth(80)
-            self.qty_input.setStyleSheet("""
-                QSpinBox {
-                    padding: 8px;
-                    font-size: 13px;
-                    border: 2px solid #bdc3c7;
-                    border-radius: 4px;
-                    background-color: white;
-                    color: #2c3e50;
-                }
-            """)
-            add_layout.addWidget(self.qty_input)
-
             btn_add = QPushButton("+ Adicionar")
             btn_add.setFixedHeight(38)
             btn_add.setCursor(Qt.PointingHandCursor)
             btn_add.setStyleSheet("""
                 QPushButton {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 6px 16px;
-                    border-radius: 4px;
-                    font-size: 13px;
-                    font-weight: bold;
-                    border: none;
+                    background-color: #3498db; color: white;
+                    padding: 6px 16px; border-radius: 4px;
+                    font-size: 13px; font-weight: bold; border: none;
                 }
                 QPushButton:hover { background-color: #2980b9; }
             """)
@@ -459,41 +404,31 @@ class OrderDetailDialog(QDialog):
             layout.addWidget(add_frame)
 
         # ── Tabela de itens ──
+        # Sempre 4 colunas: Produto | Quantidade | Preço Unit. | Subtotal
+        # Quando aberta, a coluna Quantidade vira widget [−] [n] [+]
         self.items_table = QTableWidget()
-        col_count = 5 if self.order['status'] == 'aberta' else 4
-        self.items_table.setColumnCount(col_count)
-        headers = ["Produto", "Qtd", "Preço Unit.", "Subtotal"]
-        if self.order['status'] == 'aberta':
-            headers.append("Remover")
-        self.items_table.setHorizontalHeaderLabels(headers)
+        self.items_table.setColumnCount(4)
+        self.items_table.setHorizontalHeaderLabels(["Produto", "Quantidade", "Preço Unit.", "Subtotal"])
         self.items_table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
-                border: none;
-                font-size: 13px;
-                color: #2c3e50;
+                background-color: white; border: none;
+                font-size: 13px; color: #2c3e50;
             }
             QHeaderView::section {
-                background-color: #34495e;
-                color: white;
-                padding: 8px;
-                font-weight: bold;
-                border: none;
-                font-size: 12px;
+                background-color: #34495e; color: white;
+                padding: 8px; font-weight: bold;
+                border: none; font-size: 12px;
             }
             QTableWidget::item {
-                color: #2c3e50;
-                padding: 6px;
+                color: #2c3e50; padding: 6px;
             }
         """)
-        self.items_table.horizontalHeader().setStretchLastSection(False)
-        self.items_table.setColumnWidth(0, 220)
-        self.items_table.setColumnWidth(1, 60)
-        self.items_table.setColumnWidth(2, 100)
-        self.items_table.setColumnWidth(3, 100)
-        if self.order['status'] == 'aberta':
-            self.items_table.setColumnWidth(4, 90)
-        self.items_table.verticalHeader().setDefaultSectionSize(40)
+        self.items_table.horizontalHeader().setStretchLastSection(True)
+        self.items_table.setColumnWidth(0, 240)
+        self.items_table.setColumnWidth(1, 140)
+        self.items_table.setColumnWidth(2, 110)
+        self.items_table.verticalHeader().setVisible(False)
+        self.items_table.verticalHeader().setDefaultSectionSize(44)
 
         layout.addWidget(self.items_table)
 
@@ -521,11 +456,8 @@ class OrderDetailDialog(QDialog):
             btn_close.setCursor(Qt.PointingHandCursor)
             btn_close.setStyleSheet("""
                 QPushButton {
-                    background-color: #27ae60;
-                    color: white;
-                    font-size: 16px;
-                    font-weight: bold;
-                    border-radius: 5px;
+                    background-color: #27ae60; color: white;
+                    font-size: 16px; font-weight: bold; border-radius: 5px;
                 }
                 QPushButton:hover { background-color: #229954; }
             """)
@@ -540,56 +472,84 @@ class OrderDetailDialog(QDialog):
 
         total = 0.0
         for row, item in enumerate(items):
+            # Produto
             self.items_table.setItem(row, 0, QTableWidgetItem(item['product_name']))
 
-            qty_item = QTableWidgetItem(str(item['quantity']))
-            qty_item.setTextAlignment(Qt.AlignCenter)
-            self.items_table.setItem(row, 1, qty_item)
+            # Quantidade — widget [−] [n] [+] se aberta, texto puro se fechada
+            if self.order['status'] == 'aberta':
+                self.items_table.setCellWidget(row, 1, self._create_qty_widget(item))
+            else:
+                qty_item = QTableWidgetItem(str(item['quantity']))
+                qty_item.setTextAlignment(Qt.AlignCenter)
+                self.items_table.setItem(row, 1, qty_item)
 
+            # Preço unitário
             price_item = QTableWidgetItem(f"R$ {item['unit_price']:.2f}")
             price_item.setTextAlignment(Qt.AlignCenter)
             self.items_table.setItem(row, 2, price_item)
 
+            # Subtotal
             sub_item = QTableWidgetItem(f"R$ {item['subtotal']:.2f}")
             sub_item.setTextAlignment(Qt.AlignCenter)
             self.items_table.setItem(row, 3, sub_item)
 
             total += item['subtotal']
 
-            if self.order['status'] == 'aberta':
-                btn_remove = QPushButton("X")
-                btn_remove.setFixedSize(60, 30)
-                btn_remove.setCursor(Qt.PointingHandCursor)
-                btn_remove.setStyleSheet("""
-                    QPushButton {
-                        background-color: #e74c3c;
-                        color: white;
-                        border-radius: 4px;
-                        font-size: 13px;
-                        font-weight: bold;
-                        border: none;
-                    }
-                    QPushButton:hover { background-color: #c0392b; }
-                """)
-                btn_remove.clicked.connect(partial(self.remove_item, item['id']))
-
-                btn_widget = QWidget()
-                btn_layout = QHBoxLayout(btn_widget)
-                btn_layout.setContentsMargins(5, 5, 5, 5)
-                btn_layout.addWidget(btn_remove)
-                self.items_table.setCellWidget(row, 4, btn_widget)
-
         self.total_label.setText(f"R$ {total:.2f}")
+
+    def _create_qty_widget(self, item):
+        """Cria o widget [−] [quantidade] [+] para uma linha da tabela."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(0)
+
+        btn_style = """
+            QPushButton {
+                background-color: #34495e;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 18px;
+                font-weight: bold;
+                width: 32px;
+                height: 32px;
+                padding: 0;
+            }
+            QPushButton:hover { background-color: #2c3e50; }
+            QPushButton:pressed { background-color: #1a252f; }
+        """
+
+        btn_minus = QPushButton("−")
+        btn_minus.setFixedSize(32, 32)
+        btn_minus.setCursor(Qt.PointingHandCursor)
+        btn_minus.setStyleSheet(btn_style)
+        btn_minus.clicked.connect(partial(self._change_qty, item['id'], item['quantity'] - 1))
+        layout.addWidget(btn_minus)
+
+        qty_label = QLabel(str(item['quantity']))
+        qty_label.setFixedWidth(40)
+        qty_label.setAlignment(Qt.AlignCenter)
+        qty_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
+        layout.addWidget(qty_label)
+
+        btn_plus = QPushButton("+")
+        btn_plus.setFixedSize(32, 32)
+        btn_plus.setCursor(Qt.PointingHandCursor)
+        btn_plus.setStyleSheet(btn_style)
+        btn_plus.clicked.connect(partial(self._change_qty, item['id'], item['quantity'] + 1))
+        layout.addWidget(btn_plus)
+
+        return widget
+
+    def _change_qty(self, item_id, new_qty):
+        """Chamado pelo + ou −. Atualiza no controller e recarrega a tabela."""
+        self.orders_controller.update_item_quantity(item_id, new_qty)
+        self.load_items()
 
     def add_item(self):
         product_id = self.product_combo.currentData()
-        quantity = self.qty_input.value()
-        self.orders_controller.add_item_to_order(self.order['id'], product_id, quantity)
-        self.qty_input.setValue(1)
-        self.load_items()
-
-    def remove_item(self, item_id):
-        self.orders_controller.remove_item_from_order(item_id)
+        self.orders_controller.add_item_to_order(self.order['id'], product_id, 1)
         self.load_items()
 
     def close_this_order(self):
@@ -598,10 +558,9 @@ class OrderDetailDialog(QDialog):
             QMessageBox.warning(self, "Aviso", "A comanda não possui itens.\nAdicione pelo menos um item antes de fechar.")
             return
 
-        reply = QMessageBox.question(
+        reply = show_question_message(
             self, 'Confirmação',
-            'Fechar esta comanda?\n\nOs itens serão descontados do estoque automaticamente.',
-            QMessageBox.Yes | QMessageBox.No
+            'Fechar esta comanda?\n\nOs itens serão descontados do estoque automaticamente.'
         )
         if reply == QMessageBox.Yes:
             self.orders_controller.close_order(self.order['id'])

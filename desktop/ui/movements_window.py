@@ -8,98 +8,60 @@ from desktop.controllers.products_controller import ProductsController
 from functools import partial
 
 def show_success_message(parent, title, message):
-    """Mostra mensagem de sucesso com estilo personalizado"""
     msg = QMessageBox(parent)
     msg.setIcon(QMessageBox.Information)
     msg.setWindowTitle(title)
     msg.setText(message)
     msg.setStyleSheet("""
-        QMessageBox {
-            background-color: #ecf0f1;
-        }
+        QMessageBox { background-color: #ecf0f1; }
         QMessageBox QLabel {
-            color: #2c3e50;
-            font-size: 14px;
-            font-weight: bold;
-            min-width: 300px;
+            color: #2c3e50; font-size: 14px; font-weight: bold; min-width: 300px;
         }
         QPushButton {
-            background-color: #27ae60;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            min-width: 80px;
+            background-color: #27ae60; color: white; padding: 8px 20px;
+            border-radius: 4px; font-size: 13px; font-weight: bold; min-width: 80px;
         }
-        QPushButton:hover {
-            background-color: #229954;
-        }
+        QPushButton:hover { background-color: #229954; }
     """)
     msg.exec()
 
 def show_warning_message(parent, title, message):
-    """Mostra mensagem de aviso com estilo personalizado"""
     msg = QMessageBox(parent)
     msg.setIcon(QMessageBox.Warning)
     msg.setWindowTitle(title)
     msg.setText(message)
     msg.setStyleSheet("""
-        QMessageBox {
-            background-color: #ecf0f1;
-        }
+        QMessageBox { background-color: #ecf0f1; }
         QMessageBox QLabel {
-            color: #2c3e50;
-            font-size: 14px;
-            font-weight: bold;
-            min-width: 300px;
+            color: #2c3e50; font-size: 14px; font-weight: bold; min-width: 300px;
         }
         QPushButton {
-            background-color: #e74c3c;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            min-width: 80px;
+            background-color: #e74c3c; color: white; padding: 8px 20px;
+            border-radius: 4px; font-size: 13px; font-weight: bold; min-width: 80px;
         }
-        QPushButton:hover {
-            background-color: #c0392b;
-        }
+        QPushButton:hover { background-color: #c0392b; }
     """)
     msg.exec()
 
 def show_question_message(parent, title, message):
-    """Mostra mensagem de confirmação com estilo personalizado"""
     msg = QMessageBox(parent)
     msg.setIcon(QMessageBox.Question)
     msg.setWindowTitle(title)
     msg.setText(message)
     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     msg.setStyleSheet("""
-        QMessageBox {
-            background-color: #ecf0f1;
-        }
+        QMessageBox { background-color: #ecf0f1; }
         QMessageBox QLabel {
-            color: #2c3e50;
-            font-size: 14px;
-            font-weight: bold;
-            min-width: 300px;
+            color: #2c3e50; font-size: 14px; font-weight: bold; min-width: 300px;
         }
         QPushButton {
-            background-color: #3498db;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            min-width: 80px;
+            background-color: #3498db; color: white; padding: 8px 20px;
+            border-radius: 4px; font-size: 13px; font-weight: bold; min-width: 80px;
         }
-        QPushButton:hover {
-            background-color: #2980b9;
-        }
+        QPushButton:hover { background-color: #2980b9; }
     """)
     return msg.exec()
+
 
 class MovementsWindow(QWidget):
     def __init__(self):
@@ -115,9 +77,9 @@ class MovementsWindow(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         
-        # Cor de fundo
         self.setStyleSheet("background-color: #ecf0f1;")
         
+        # ── Header ──
         header_layout = QHBoxLayout()
         
         title = QLabel("Movimentações de Estoque")
@@ -136,32 +98,14 @@ class MovementsWindow(QWidget):
                 border-radius: 5px;
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #229954;
-            }
+            QPushButton:hover { background-color: #229954; }
         """)
-        btn_entry.clicked.connect(lambda: self.show_movement_dialog("ENTRY"))
+        btn_entry.clicked.connect(self.show_entry_dialog)
         header_layout.addWidget(btn_entry)
-        
-        btn_exit = QPushButton("- Registrar Saída")
-        btn_exit.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                font-size: 16px;
-                padding: 10px 20px;
-                border-radius: 5px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
-        btn_exit.clicked.connect(lambda: self.show_movement_dialog("EXIT"))
-        header_layout.addWidget(btn_exit)
         
         layout.addLayout(header_layout)
         
+        # ── Tabela ──
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
@@ -189,13 +133,13 @@ class MovementsWindow(QWidget):
             }
         """)
         self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.setColumnWidth(0, 50)   # ID
-        self.table.setColumnWidth(1, 200)  # Produto
-        self.table.setColumnWidth(2, 100)  # Tipo
-        self.table.setColumnWidth(3, 100)  # Quantidade
-        self.table.setColumnWidth(4, 180)  # Data
-        self.table.setColumnWidth(5, 200)  # Observação
-        self.table.setColumnWidth(6, 120)  # Ações
+        self.table.setColumnWidth(0, 50)
+        self.table.setColumnWidth(1, 200)
+        self.table.setColumnWidth(2, 100)
+        self.table.setColumnWidth(3, 100)
+        self.table.setColumnWidth(4, 180)
+        self.table.setColumnWidth(5, 200)
+        self.table.setColumnWidth(6, 120)
         self.table.verticalHeader().setDefaultSectionSize(50)
         layout.addWidget(self.table)
     
@@ -219,17 +163,13 @@ class MovementsWindow(QWidget):
             movement_type = "ENTRADA" if movement['movement_type'] == "ENTRY" else "SAÍDA"
             type_item = QTableWidgetItem(movement_type)
             type_item.setTextAlignment(Qt.AlignCenter)
+            font = type_item.font()
+            font.setBold(True)
+            type_item.setFont(font)
             if movement['movement_type'] == "ENTRY":
                 type_item.setForeground(Qt.darkGreen)
-                type_item.setFont(type_item.font())
-                font = type_item.font()
-                font.setBold(True)
-                type_item.setFont(font)
             else:
                 type_item.setForeground(Qt.red)
-                font = type_item.font()
-                font.setBold(True)
-                type_item.setFont(font)
             self.table.setItem(row, 2, type_item)
             
             # Quantidade
@@ -245,54 +185,53 @@ class MovementsWindow(QWidget):
             # Observação
             self.table.setItem(row, 5, QTableWidgetItem(movement.get('note', '')))
             
-            # Botão Remover
+            # Ações — botão Remover só aparece em entradas manuais (não geradas por comanda)
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(5, 5, 5, 5)
             
-            btn_delete = QPushButton("Remover")
-            btn_delete.setMinimumWidth(90)
-            btn_delete.setMinimumHeight(35)
-            btn_delete.setCursor(Qt.PointingHandCursor)
-            btn_delete.setStyleSheet("""
-                QPushButton {
-                    background-color: #e74c3c;
-                    color: white;
-                    padding: 8px 12px;
-                    border-radius: 4px;
-                    font-size: 13px;
-                    font-weight: bold;
-                    border: none;
-                }
-                QPushButton:hover {
-                    background-color: #c0392b;
-                }
-                QPushButton:pressed {
-                    background-color: #a93226;
-                }
-            """)
-            btn_delete.clicked.connect(partial(self.delete_movement, movement['id']))
-            actions_layout.addWidget(btn_delete)
+            note = movement.get('note', '') or ''
+            is_order_exit = movement['movement_type'] == "EXIT" and note.startswith("Comanda #")
+            
+            if not is_order_exit:
+                btn_delete = QPushButton("Remover")
+                btn_delete.setMinimumWidth(90)
+                btn_delete.setMinimumHeight(35)
+                btn_delete.setCursor(Qt.PointingHandCursor)
+                btn_delete.setStyleSheet("""
+                    QPushButton {
+                        background-color: #e74c3c; color: white;
+                        padding: 8px 12px; border-radius: 4px;
+                        font-size: 13px; font-weight: bold; border: none;
+                    }
+                    QPushButton:hover { background-color: #c0392b; }
+                    QPushButton:pressed { background-color: #a93226; }
+                """)
+                btn_delete.clicked.connect(partial(self.delete_movement, movement['id']))
+                actions_layout.addWidget(btn_delete)
+            else:
+                # Saídas geradas por comanda não podem ser removidas individualmente
+                lbl = QLabel("Auto")
+                lbl.setStyleSheet("color: #95a5a6; font-size: 12px; font-style: italic;")
+                lbl.setAlignment(Qt.AlignCenter)
+                actions_layout.addWidget(lbl)
             
             self.table.setCellWidget(row, 6, actions_widget)
     
-    def show_movement_dialog(self, movement_type):
-        dialog = MovementDialog(self, movement_type, self.products_controller)
+    def show_entry_dialog(self):
+        dialog = EntryDialog(self, self.products_controller)
         if dialog.exec() == QDialog.Accepted:
             data = dialog.get_data()
             movement_id, error = self.movements_controller.add_movement(**data)
             
             if error:
-                # Mostrar erro se houver
                 show_warning_message(self, "Erro", error)
             else:
-                # Mostrar sucesso
-                show_success_message(self, "Sucesso", "Movimentação registrada com sucesso!")
+                show_success_message(self, "Sucesso", "Entrada registrada com sucesso!")
         
     def delete_movement(self, movement_id):
         result = show_question_message(
-            self, 
-            'Confirmação', 
+            self, 'Confirmação', 
             'Deseja realmente remover esta movimentação?\n\nO estoque será revertido automaticamente.'
         )
         if result == QMessageBox.Yes:
@@ -302,13 +241,12 @@ class MovementsWindow(QWidget):
             else:
                 show_warning_message(self, "Erro", "Não foi possível remover a movimentação")
 
-class MovementDialog(QDialog):
-    def __init__(self, parent, movement_type, products_controller):
+
+class EntryDialog(QDialog):
+    def __init__(self, parent, products_controller):
         super().__init__(parent)
-        self.movement_type = movement_type
         self.products_controller = products_controller
-        title_text = "Registrar Entrada" if movement_type == "ENTRY" else "Registrar Saída"
-        self.setWindowTitle(title_text)
+        self.setWindowTitle("Registrar Entrada")
         self.setModal(True)
         self.setMinimumWidth(500)
         self.setMinimumHeight(350)
@@ -319,10 +257,8 @@ class MovementDialog(QDialog):
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
         
-        # Estilo para labels
         label_style = "color: #2c3e50; font-size: 14px; font-weight: bold;"
         
-        # Estilo para inputs
         input_style = """
             QComboBox, QSpinBox, QTextEdit {
                 padding: 8px;
@@ -335,19 +271,13 @@ class MovementDialog(QDialog):
             QComboBox:focus, QSpinBox:focus, QTextEdit:focus {
                 border: 2px solid #3498db;
             }
-            QComboBox::drop-down {
-                border: none;
-                padding-right: 10px;
-            }
+            QComboBox::drop-down { border: none; padding-right: 10px; }
         """
-        
         self.setStyleSheet(input_style)
         
-        # Título grande
-        title_color = "#27ae60" if self.movement_type == "ENTRY" else "#e74c3c"
-        title_text = "➕ ENTRADA DE ESTOQUE" if self.movement_type == "ENTRY" else "➖ SAÍDA DE ESTOQUE"
-        title = QLabel(title_text)
-        title.setStyleSheet(f"color: {title_color}; font-size: 18px; font-weight: bold; padding: 10px; background-color: transparent;")
+        # Título
+        title = QLabel("➕ ENTRADA DE ESTOQUE")
+        title.setStyleSheet("color: #27ae60; font-size: 18px; font-weight: bold; padding: 10px; background-color: transparent;")
         title.setAlignment(Qt.AlignCenter)
         layout.addRow(title)
         
@@ -384,7 +314,7 @@ class MovementDialog(QDialog):
         
         self.note_input = QTextEdit()
         self.note_input.setMaximumHeight(100)
-        self.note_input.setPlaceholderText("Ex: Reposição semanal, venda para cliente X, etc...")
+        self.note_input.setPlaceholderText("Ex: Reposição semanal, fornecedor X, etc...")
         
         layout.addRow(note_label, self.note_input)
         
@@ -392,24 +322,16 @@ class MovementDialog(QDialog):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
         
-        btn_color = "#27ae60" if self.movement_type == "ENTRY" else "#e74c3c"
-        btn_hover = "#229954" if self.movement_type == "ENTRY" else "#c0392b"
-        
         btn_save = QPushButton("✓ Confirmar")
         btn_save.setFixedHeight(45)
         btn_save.setCursor(Qt.PointingHandCursor)
-        btn_save.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {btn_color};
-                color: white;
-                padding: 10px 30px;
-                border-radius: 5px;
-                font-size: 15px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {btn_hover};
-            }}
+        btn_save.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: white;
+                padding: 10px 30px; border-radius: 5px;
+                font-size: 15px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #229954; }
         """)
         btn_save.clicked.connect(self.accept)
         
@@ -418,16 +340,11 @@ class MovementDialog(QDialog):
         btn_cancel.setCursor(Qt.PointingHandCursor)
         btn_cancel.setStyleSheet("""
             QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                padding: 10px 30px;
-                border-radius: 5px;
-                font-size: 15px;
-                font-weight: bold;
+                background-color: #95a5a6; color: white;
+                padding: 10px 30px; border-radius: 5px;
+                font-size: 15px; font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
+            QPushButton:hover { background-color: #7f8c8d; }
         """)
         btn_cancel.clicked.connect(self.reject)
         
@@ -440,7 +357,7 @@ class MovementDialog(QDialog):
     def get_data(self):
         return {
             'product_id': self.product_combo.currentData(),
-            'movement_type': self.movement_type,
+            'movement_type': 'ENTRY',
             'quantity': self.quantity_input.value(),
             'note': self.note_input.toPlainText()
         }

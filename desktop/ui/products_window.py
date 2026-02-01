@@ -132,7 +132,7 @@ class ProductsWindow(QWidget):
         filters_layout.addWidget(self.search_input, 3)
         
         self.category_filter = QComboBox()
-        self.category_filter.addItems(["Todas", "bebida", "doce", "salgado"])
+        self.category_filter.addItems(["Todas", "bebida", "doce", "salgado", "acessório"])
         self.category_filter.setStyleSheet("""
             QComboBox {
                 padding: 10px;
@@ -568,7 +568,7 @@ class ProductDialog(QDialog):
         category_label.setStyleSheet(label_style)
         
         self.category_input = QComboBox()
-        self.category_input.addItems(["bebida", "doce", "salgado"])
+        self.category_input.addItems(["bebida", "doce", "salgado", "acessório"])
         self.category_input.setStyleSheet(input_style)
         self.category_input.setMinimumHeight(45)
         

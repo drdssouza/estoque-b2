@@ -44,7 +44,7 @@ class DataLoader:
             'id': pd.Series([], dtype='int64'),
             'customer_name': pd.Series([], dtype='str'),
             'created_at': pd.Series([], dtype='datetime64[ns]'),
-            'status': pd.Series([], dtype='str'),   # "aberta" ou "fechada"
+            'status': pd.Series([], dtype='str'),
             'total': pd.Series([], dtype='float64')
         })
 
@@ -149,8 +149,22 @@ class DataLoader:
     # ─── MOVEMENTS ───────────────────────────────────────────────────
 
     def add_movement(self, product_id, movement_type, quantity, note=""):
+        """
+        Retorna tupla (new_id, error):
+          - Sucesso:  (new_id, None)
+          - Erro:     (None,   mensagem)
+        """
         movements_df = self.load_movements()
         products_df = self.load_products()
+
+        mask = products_df['id'] == product_id
+        if not mask.any():
+            return None, "Produto não encontrado."
+
+        current_stock = int(products_df.loc[mask, 'current_stock'].iloc[0])
+
+        if movement_type == "EXIT" and quantity > current_stock:
+            return None, f"Estoque insuficiente. Disponível: {current_stock} unidades."
 
         new_id = int(movements_df['id'].max()) + 1 if len(movements_df) > 0 else 1
 
@@ -166,14 +180,13 @@ class DataLoader:
         movements_df = pd.concat([movements_df, new_movement], ignore_index=True)
         self.save_movements(movements_df)
 
-        mask = products_df['id'] == product_id
         if movement_type == "ENTRY":
             products_df.loc[mask, 'current_stock'] += quantity
         elif movement_type == "EXIT":
             products_df.loc[mask, 'current_stock'] -= quantity
 
         self.save_products(products_df)
-        return new_id
+        return new_id, None
 
     # ─── ORDERS ──────────────────────────────────────────────────────
 
@@ -205,8 +218,6 @@ class DataLoader:
         })
         items_df = pd.concat([items_df, new_item], ignore_index=True)
         self.save_order_items(items_df)
-
-        # Atualizar total da comanda
         self._recalculate_order_total(order_id)
         return new_id
 
@@ -221,13 +232,36 @@ class DataLoader:
         self._recalculate_order_total(order_id)
         return True
 
+    def update_order_item_quantity(self, item_id, new_quantity):
+        """
+        Atualiza a quantidade de um item da comanda.
+        Se new_quantity <= 0, remove o item.
+        """
+        items_df = self.load_order_items()
+        mask = items_df['id'] == item_id
+        if not mask.any():
+            return False
+
+        order_id = int(items_df.loc[mask, 'order_id'].iloc[0])
+
+        if new_quantity <= 0:
+            items_df = items_df[~mask]
+            self.save_order_items(items_df)
+        else:
+            unit_price = float(items_df.loc[mask, 'unit_price'].iloc[0])
+            items_df.loc[mask, 'quantity'] = new_quantity
+            items_df.loc[mask, 'subtotal'] = new_quantity * unit_price
+            self.save_order_items(items_df)
+
+        self._recalculate_order_total(order_id)
+        return True
+
     def close_order(self, order_id):
         orders_df = self.load_orders()
         mask = orders_df['id'] == order_id
         orders_df.loc[mask, 'status'] = 'fechada'
         self.save_orders(orders_df)
 
-        # Registrar saídas de estoque para cada item da comanda
         items_df = self.load_order_items()
         order_items = items_df[items_df['order_id'] == order_id]
         for _, item in order_items.iterrows():
@@ -239,11 +273,10 @@ class DataLoader:
             )
 
     def delete_order(self, order_id):
-        # Remover itens
         items_df = self.load_order_items()
         items_df = items_df[items_df['order_id'] != order_id]
         self.save_order_items(items_df)
-        # Remover comanda
+
         orders_df = self.load_orders()
         orders_df = orders_df[orders_df['id'] != order_id]
         self.save_orders(orders_df)
