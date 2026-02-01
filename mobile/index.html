@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arena B2 - Estoque</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏖️ ARENA B2</h1>
+            <p>Controle de Estoque</p>
+        </header>
+
+        <div id="login-section" class="section">
+            <h2>Login</h2>
+            <input type="text" id="username" placeholder="Usuário" />
+            <input type="password" id="password" placeholder="Senha" />
+            <button onclick="login()">Entrar</button>
+            <p id="login-error" class="error"></p>
+        </div>
+
+        <div id="main-section" class="section hidden">
+            <div class="nav-buttons">
+                <button onclick="showProducts()">📦 Produtos</button>
+                <button onclick="showLowStock()">⚠️ Estoque Baixo</button>
+                <button onclick="showMovements()">🔄 Histórico</button>
+                <button onclick="logout()">🚪 Sair</button>
+            </div>
+
+            <div id="products-view" class="view">
+                <h2>Produtos</h2>
+                <input type="text" id="search-input" placeholder="Buscar produto..." onkeyup="searchProducts()" />
+                <div id="products-list"></div>
+            </div>
+
+            <div id="low-stock-view" class="view hidden">
+                <h2>⚠️ Estoque Baixo</h2>
+                <div id="low-stock-list"></div>
+            </div>
+
+            <div id="movements-view" class="view hidden">
+                <h2>🔄 Histórico de Movimentações</h2>
+                <div id="movements-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
