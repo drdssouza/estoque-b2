@@ -36,6 +36,9 @@ class OrdersController(QObject):
         self.orders_updated.emit()
         return order_id
 
+    def update_order_phone(self, order_id, phone):
+        self.data_loader.update_order_phone(order_id, phone)
+
     def add_item_to_order(self, order_id, product_id, quantity):
         products_df = self.data_loader.load_products()
         product = products_df[products_df['id'] == product_id]
@@ -65,6 +68,19 @@ class OrdersController(QObject):
     def delete_order(self, order_id):
         self.data_loader.delete_order(order_id)
         self.orders_updated.emit()
+
+    def remove_last_entry_for_product(self, order_id, product_id):
+        """Remove ou reduz a última entrada de um produto na comanda."""
+        items_df = self.data_loader.load_order_items()
+        mask = (items_df['order_id'] == order_id) & (items_df['product_id'] == product_id)
+        product_items = items_df[mask].sort_values('id')
+        if len(product_items) == 0:
+            return False
+        last = product_items.iloc[-1]
+        success = self.data_loader.update_order_item_quantity(int(last['id']), int(last['quantity']) - 1)
+        if success:
+            self.orders_updated.emit()
+        return success
 
     def search_orders(self, query="", status_filter=None):
         df = self.data_loader.load_orders()

@@ -1,7 +1,7 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QTableWidget, QTableWidgetItem, QLineEdit,
                                QDialog, QFormLayout, QDoubleSpinBox, QSpinBox,
-                               QComboBox, QMessageBox)
+                               QComboBox, QMessageBox, QHeaderView)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from desktop.controllers.products_controller import ProductsController
@@ -210,15 +210,17 @@ class ProductsWindow(QWidget):
                 font-size: 13px;
             }
         """)
-        self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.setColumnWidth(0, 50)   # ID
-        self.table.setColumnWidth(1, 200)  # Nome
-        self.table.setColumnWidth(2, 100)  # Categoria
-        self.table.setColumnWidth(3, 120)  # Preço Compra
-        self.table.setColumnWidth(4, 120)  # Preço Venda
-        self.table.setColumnWidth(5, 130)  # Estoque Mínimo
-        self.table.setColumnWidth(6, 130)  # Estoque Atual
-        self.table.setColumnWidth(7, 220)  # Ações (botões)
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        self.table.setColumnWidth(0, 35)   # ID
+        self.table.setColumnWidth(1, 261)  # Nome
+        self.table.setColumnWidth(2, 117)  # Categoria
+        self.table.setColumnWidth(3, 134)  # Preço Compra
+        self.table.setColumnWidth(4, 100)  # Preço Venda
+        self.table.setColumnWidth(5, 141)  # Estoque Mínimo
+        self.table.setColumnWidth(6, 134)  # Estoque Atual
+        self.table.setColumnWidth(7, 189)  # Ações
         layout.addWidget(self.table)
     
     def load_products(self):
@@ -396,49 +398,37 @@ class ProductsWindow(QWidget):
             actions_layout.setSpacing(8)
             
             btn_edit = QPushButton("Editar")
-            btn_edit.setMinimumWidth(85)
-            btn_edit.setMinimumHeight(35)
+            btn_edit.setFixedSize(85, 35)
             btn_edit.setCursor(Qt.PointingHandCursor)
             btn_edit.setStyleSheet("""
                 QPushButton {
                     background-color: #3498db;
                     color: white;
-                    padding: 8px 12px;
                     border-radius: 4px;
                     font-size: 13px;
                     font-weight: bold;
                     border: none;
                 }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #21618c;
-                }
+                QPushButton:hover { background-color: #2980b9; }
+                QPushButton:pressed { background-color: #21618c; }
             """)
             btn_edit.clicked.connect(partial(self.show_edit_product_dialog, product))
             actions_layout.addWidget(btn_edit)
-            
+
             btn_delete = QPushButton("Desativar")
-            btn_delete.setMinimumWidth(85)
-            btn_delete.setMinimumHeight(35)
+            btn_delete.setFixedSize(100, 35)
             btn_delete.setCursor(Qt.PointingHandCursor)
             btn_delete.setStyleSheet("""
                 QPushButton {
                     background-color: #e74c3c;
                     color: white;
-                    padding: 8px 12px;
                     border-radius: 4px;
                     font-size: 13px;
                     font-weight: bold;
                     border: none;
                 }
-                QPushButton:hover {
-                    background-color: #c0392b;
-                }
-                QPushButton:pressed {
-                    background-color: #a93226;
-                }
+                QPushButton:hover { background-color: #c0392b; }
+                QPushButton:pressed { background-color: #a93226; }
             """)
             btn_delete.clicked.connect(partial(self.deactivate_product, product['id']))
             actions_layout.addWidget(btn_delete)
