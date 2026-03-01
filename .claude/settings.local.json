@@ -14,7 +14,9 @@
       "Bash(python -c \"from desktop.ui.order_window import OrderDetailDialog, WhatsAppDialog; from backend.utils.data_loader import DataLoader; print\\(''OK''\\)\")",
       "Bash(python -c \"from desktop.ui.order_window import WhatsAppDialog; print\\(''OK''\\)\")",
       "Bash(python -c \"from desktop.ui.order_window import OrderDetailDialog; print\\(''OK''\\)\")",
-      "Bash(python -c \"from desktop.version_checker import VersionChecker; from version import APP_VERSION, UPDATE_CHECK_URL, DOWNLOAD_URL; print\\(f''v{APP_VERSION} OK''\\)\")"
+      "Bash(python -c \"from desktop.version_checker import VersionChecker; from version import APP_VERSION, UPDATE_CHECK_URL, DOWNLOAD_URL; print\\(f''v{APP_VERSION} OK''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(python -c \"from PIL import Image; print\\(''Pillow OK''\\)\")"
     ]
   }
 }

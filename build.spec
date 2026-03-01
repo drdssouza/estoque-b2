@@ -11,6 +11,7 @@ a = Analysis(
     datas=[
         ('desktop/assets', 'desktop/assets'),
         ('version.py', '.'),
+        ('icon.ico', '.'),
     ],
     hiddenimports=[
         'PySide6.QtCharts',

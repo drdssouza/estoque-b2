@@ -82,6 +82,29 @@ class OrdersController(QObject):
             self.orders_updated.emit()
         return success
 
+    def remove_product_from_order(self, order_id, product_id):
+        """Remove todas as entradas de um produto numa comanda aberta."""
+        self.data_loader.remove_product_entries(order_id, product_id)
+        self.orders_updated.emit()
+
+    def get_orders_by_customer(self, name):
+        """Retorna lista de comandas de um cliente, ordenadas por data desc."""
+        import pandas as pd
+        df = self.data_loader.load_orders()
+        filtered = df[df['customer_name'] == name].copy()
+        if len(filtered) == 0:
+            return []
+        filtered['created_at'] = pd.to_datetime(filtered['created_at'])
+        filtered = filtered.sort_values('created_at', ascending=False)
+        return filtered.to_dict(orient='records')
+
+    def get_all_customer_names(self):
+        """Retorna lista de nomes únicos de clientes (todas as comandas)."""
+        df = self.data_loader.load_orders()
+        if len(df) == 0:
+            return []
+        return sorted(df['customer_name'].dropna().unique().tolist())
+
     def search_orders(self, query="", status_filter=None):
         df = self.data_loader.load_orders()
         if query:

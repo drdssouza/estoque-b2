@@ -1,11 +1,11 @@
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 
 # ─── COMO CONFIGURAR O VERIFICADOR DE VERSÃO ──────────────────────────────────
 #
 # 1. Suba este projeto no GitHub (repositório público ou privado).
 #
 # 2. O arquivo "latest_version.txt" (na raiz do projeto) contém apenas
-#    o número da versão mais recente, ex: 1.2.0
+#    o número da versão mais recente, ex: 1.2.1
 #    Atualize esse arquivo a cada novo release.
 #
 # 3. Copie o link "Raw" do latest_version.txt no GitHub:
@@ -20,3 +20,6 @@ APP_VERSION = "1.2.0"
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/drdssouza/estoque-b2/main/latest_version.txt"
 DOWNLOAD_URL     = "https://github.com/drdssouza/estoque-b2/releases/latest"
+
+# URL direta do instalador — usada pelo auto-updater (substitui {version} pelo número da versão)
+INSTALLER_URL = "https://github.com/drdssouza/estoque-b2/releases/download/v{version}/Controle-B2-Setup-{version}.exe"

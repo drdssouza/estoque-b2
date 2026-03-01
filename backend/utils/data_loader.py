@@ -364,6 +364,17 @@ class DataLoader:
             orders_df = orders_df[orders_df['id'] != order_id]
             self.save_orders(orders_df)
 
+    def remove_product_entries(self, order_id, product_id):
+        """Remove todas as entradas de um produto numa comanda e recalcula o total."""
+        with self.lock:
+            items_df = self.load_order_items()
+            items_df = items_df[~(
+                (items_df['order_id'] == order_id) &
+                (items_df['product_id'] == product_id)
+            )]
+            self.save_order_items(items_df)
+            self._recalculate_order_total(order_id)
+
     def _recalculate_order_total(self, order_id):
         with self.lock:
             items_df = self.load_order_items()

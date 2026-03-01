@@ -3,7 +3,7 @@ title Build Controle B2
 
 echo.
 echo ========================================
-echo   Build Controle B2 v1.2.0
+echo   Build Controle B2 v1.2.1
 echo ========================================
 echo.
 
@@ -54,7 +54,7 @@ if errorlevel 1 (
 echo.
 echo ========================================
 echo   Instalador criado com sucesso!
-echo   Local: dist_installer\Controle-B2-Setup-1.2.0.exe
+echo   Local: dist_installer\Controle-B2-Setup-1.2.1.exe
 echo ========================================
 echo.
 pause

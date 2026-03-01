@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QTableWidget, QTableWidgetItem, QDialog,
-                               QComboBox, QLineEdit, QMessageBox, QFrame, QHeaderView)
+                               QComboBox, QLineEdit, QMessageBox, QFrame, QHeaderView,
+                               QCompleter, QFileDialog)
 from PySide6.QtCore import Qt
 from desktop.controllers.orders_controller import OrdersController
 from desktop.controllers.products_controller import ProductsController
@@ -9,6 +10,7 @@ import webbrowser
 import urllib.parse
 import re
 import json
+import os
 from pathlib import Path
 
 
@@ -221,7 +223,8 @@ class OrdersWindow(QWidget):
     # ── ACTIONS ──────────────────────────────────────────────────────
 
     def create_new_order(self):
-        dialog = NewOrderDialog(self)
+        customer_names = self.orders_controller.get_all_customer_names()
+        dialog = NewOrderDialog(self, customer_names)
         if dialog.exec() == QDialog.Accepted:
             customer_name = dialog.get_customer_name()
             if customer_name.strip():
@@ -255,8 +258,9 @@ class OrdersWindow(QWidget):
 # ─── DIALOGS ─────────────────────────────────────────────────────────────────
 
 class NewOrderDialog(QDialog):
-    def __init__(self, parent):
+    def __init__(self, parent, customer_names=None):
         super().__init__(parent)
+        self._customer_names = customer_names or []
         self.setWindowTitle("Nova Comanda")
         self.setModal(True)
         self.setMinimumWidth(420)
@@ -287,6 +291,12 @@ class NewOrderDialog(QDialog):
             QLineEdit:focus { border: 2px solid #3498db; }
         """)
         layout.addWidget(self.name_input)
+
+        if self._customer_names:
+            completer = QCompleter(self._customer_names)
+            completer.setCaseSensitivity(Qt.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchContains)
+            self.name_input.setCompleter(completer)
 
         buttons = QHBoxLayout()
 
@@ -350,6 +360,21 @@ class OrderDetailDialog(QDialog):
         name_label = QLabel(f"Cliente: {self.order['customer_name']}")
         name_label.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
         info_layout.addWidget(name_label)
+
+        btn_hist_client = QPushButton("📋 Histórico")
+        btn_hist_client.setFixedHeight(30)
+        btn_hist_client.setCursor(Qt.PointingHandCursor)
+        btn_hist_client.setStyleSheet("""
+            QPushButton {
+                background-color: #8e44ad; color: white;
+                padding: 4px 10px; border-radius: 4px;
+                font-size: 12px; font-weight: bold; border: none;
+            }
+            QPushButton:hover { background-color: #7d3c98; }
+        """)
+        btn_hist_client.clicked.connect(self._show_customer_history)
+        info_layout.addWidget(btn_hist_client)
+
         info_layout.addStretch()
 
         phone_icon = QLabel("📱")
@@ -445,11 +470,11 @@ class OrderDetailDialog(QDialog):
             layout.addWidget(add_frame)
 
         # ── Tabela de itens (agrupada por produto) ──
-        # Colunas: Produto | Quantidade | Preço Unit. | Subtotal | Histórico
+        # Colunas: Produto | Quantidade | Preço Unit. | Subtotal | Histórico | Remover
         self.items_table = QTableWidget()
-        self.items_table.setColumnCount(5)
+        self.items_table.setColumnCount(6)
         self.items_table.setHorizontalHeaderLabels(
-            ["Produto", "Quantidade", "Preço Unit.", "Subtotal", "Histórico"]
+            ["Produto", "Quantidade", "Preço Unit.", "Subtotal", "Histórico", "Remover"]
         )
         self.items_table.setStyleSheet("""
             QTableWidget {
@@ -469,8 +494,10 @@ class OrderDetailDialog(QDialog):
         items_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Preço Unit.
         items_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Subtotal
         items_header.setSectionResizeMode(4, QHeaderView.Fixed)             # Histórico
+        items_header.setSectionResizeMode(5, QHeaderView.Fixed)             # Remover
         self.items_table.setColumnWidth(1, 130)
         self.items_table.setColumnWidth(4, 100)
+        self.items_table.setColumnWidth(5, 95)
         self.items_table.verticalHeader().setVisible(False)
         self.items_table.verticalHeader().setDefaultSectionSize(44)
         layout.addWidget(self.items_table)
@@ -493,6 +520,19 @@ class OrderDetailDialog(QDialog):
         # ── Botões de ação ──
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
+
+        btn_pdf = QPushButton("📄 Salvar PDF")
+        btn_pdf.setFixedHeight(44)
+        btn_pdf.setCursor(Qt.PointingHandCursor)
+        btn_pdf.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9; color: white;
+                font-size: 15px; font-weight: bold; border-radius: 5px;
+            }
+            QPushButton:hover { background-color: #2471a3; }
+        """)
+        btn_pdf.clicked.connect(self._salvar_pdf)
+        btn_row.addWidget(btn_pdf)
 
         btn_whatsapp = QPushButton("📱 Cobrar via WhatsApp")
         btn_whatsapp.setFixedHeight(44)
@@ -581,6 +621,10 @@ class OrderDetailDialog(QDialog):
             # Botão Histórico
             self.items_table.setCellWidget(row, 4, self._create_hist_widget(group))
 
+            # Botão Remover (só para comandas abertas)
+            if self.order['status'] == 'aberta':
+                self.items_table.setCellWidget(row, 5, self._create_remove_widget(group))
+
             total += group['subtotal']
 
         self.total_label.setText(f"R$ {total:.2f}")
@@ -662,6 +706,142 @@ class OrderDetailDialog(QDialog):
         """[+] adiciona mais uma unidade (nova entrada com timestamp)."""
         self.orders_controller.add_item_to_order(self.order['id'], product_id, 1)
         self.load_items()
+
+    def _create_remove_widget(self, group):
+        """Botão Remover que exclui TODAS as entradas desse produto na comanda."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setAlignment(Qt.AlignCenter)
+        btn = QPushButton("🗑 Remover")
+        btn.setFixedHeight(32)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c; color: white;
+                padding: 4px 8px; border-radius: 4px;
+                font-size: 12px; font-weight: bold; border: none;
+            }
+            QPushButton:hover { background-color: #c0392b; }
+        """)
+        btn.clicked.connect(partial(self._remove_product, group['product_id']))
+        layout.addWidget(btn)
+        return widget
+
+    def _remove_product(self, product_id):
+        """Remove todas as entradas de um produto da comanda."""
+        self.orders_controller.remove_product_from_order(self.order['id'], product_id)
+        self.load_items()
+
+    def _show_customer_history(self):
+        """Abre o histórico de comandas do cliente."""
+        dialog = CustomerHistoryDialog(
+            self, self.order['customer_name'],
+            self.orders_controller, self.products_controller
+        )
+        dialog.exec()
+
+    def _salvar_pdf(self):
+        """Gera um PDF da comanda e abre no visualizador padrão."""
+        items = self.orders_controller.get_order_items(self.order['id'])
+        if not items:
+            QMessageBox.warning(self, "Aviso", "A comanda não possui itens.")
+            return
+
+        nome_arquivo = f"Comanda_{self.order['id']}_{self.order['customer_name']}.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Salvar PDF", nome_arquivo, "PDF (*.pdf)"
+        )
+        if not path:
+            return
+
+        # Agrupar itens por produto
+        groups = {}
+        for item in items:
+            pid = item['product_id']
+            if pid not in groups:
+                groups[pid] = {
+                    'product_name': item['product_name'],
+                    'quantity': 0,
+                    'unit_price': item['unit_price'],
+                    'subtotal': 0.0
+                }
+            groups[pid]['quantity'] += item['quantity']
+            groups[pid]['subtotal'] += item['subtotal']
+        grouped = list(groups.values())
+        total = sum(g['subtotal'] for g in grouped)
+        pix_key = self._load_pix_key()
+
+        try:
+            import pandas as pd
+            date_str = pd.to_datetime(self.order.get('created_at')).strftime('%d/%m/%Y %H:%M')
+        except Exception:
+            date_str = '-'
+
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib import colors
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import cm
+
+            doc = SimpleDocTemplate(path, pagesize=A4,
+                                    rightMargin=2*cm, leftMargin=2*cm,
+                                    topMargin=2*cm, bottomMargin=2*cm)
+            styles = getSampleStyleSheet()
+            elems = []
+
+            title_style = ParagraphStyle('t', parent=styles['Heading1'],
+                                         fontSize=18, alignment=1, spaceAfter=4)
+            sub_style = ParagraphStyle('s', parent=styles['Normal'],
+                                       fontSize=12, alignment=1, spaceAfter=2)
+            elems.append(Paragraph(f"Comanda #{self.order['id']}", title_style))
+            elems.append(Paragraph(f"Cliente: {self.order['customer_name']}", sub_style))
+            elems.append(Paragraph(f"Data/Hora: {date_str}", sub_style))
+            elems.append(Spacer(1, 0.5*cm))
+
+            table_data = [["Produto", "Qtd", "Preço Unit.", "Subtotal"]]
+            for g in grouped:
+                table_data.append([
+                    g['product_name'],
+                    str(g['quantity']),
+                    f"R$ {g['unit_price']:.2f}",
+                    f"R$ {g['subtotal']:.2f}",
+                ])
+            table_data.append(["", "", "TOTAL:", f"R$ {total:.2f}"])
+
+            t = Table(table_data, colWidths=[9*cm, 2*cm, 3.5*cm, 3.5*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                ('GRID', (0, 0), (-1, -2), 0.5, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2),
+                 [colors.white, colors.HexColor('#f2f3f4')]),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, -1), (-1, -1), 12),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#2c3e50')),
+                ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#2ecc71')),
+            ]))
+            elems.append(t)
+            elems.append(Spacer(1, 0.5*cm))
+
+            footer_style = ParagraphStyle('f', parent=styles['Normal'],
+                                          fontSize=11, alignment=1)
+            elems.append(Paragraph(f"Pagamento via Pix: <b>{pix_key}</b>", footer_style))
+
+            doc.build(elems)
+        except Exception as e:
+            QMessageBox.critical(self, "Erro ao gerar PDF", str(e))
+            return
+
+        try:
+            os.startfile(path)
+        except Exception:
+            pass
+        QMessageBox.information(self, "PDF salvo", f"Arquivo salvo em:\n{path}")
 
     def add_item(self):
         """Botão '+ Adicionar': adiciona o produto selecionado no combo."""
@@ -989,3 +1169,109 @@ class WhatsAppDialog(QDialog):
 
     def get_pix_key(self):
         return self.pix_input.text()
+
+
+# ─── HISTÓRICO POR CLIENTE ────────────────────────────────────────────────────
+
+class CustomerHistoryDialog(QDialog):
+    """Exibe todas as comandas de um cliente com opção de abrir cada uma."""
+
+    def __init__(self, parent, customer_name, orders_controller, products_controller):
+        super().__init__(parent)
+        self.customer_name = customer_name
+        self.orders_controller = orders_controller
+        self.products_controller = products_controller
+        self.setWindowTitle(f"Histórico — {customer_name}")
+        self.setModal(True)
+        self.setMinimumWidth(580)
+        self.setMinimumHeight(420)
+        self._orders = []
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        title = QLabel(f"Histórico de comandas: {self.customer_name}")
+        title.setStyleSheet("font-size: 15px; font-weight: bold; color: #2c3e50;")
+        layout.addWidget(title)
+
+        hint = QLabel("Clique duplo em uma linha para abrir a comanda.")
+        hint.setStyleSheet("font-size: 12px; color: #7f8c8d;")
+        layout.addWidget(hint)
+
+        self.hist_table = QTableWidget()
+        self.hist_table.setColumnCount(4)
+        self.hist_table.setHorizontalHeaderLabels(["ID", "Data/Hora", "Status", "Total"])
+        self.hist_table.setStyleSheet("""
+            QTableWidget { background-color: white; border: none; font-size: 13px; }
+            QHeaderView::section {
+                background-color: #34495e; color: white; padding: 8px;
+                font-weight: bold; border: none;
+            }
+            QTableWidget::item { color: #2c3e50; padding: 6px; }
+        """)
+        h = self.hist_table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.Fixed)
+        h.setSectionResizeMode(1, QHeaderView.Stretch)
+        h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.hist_table.setColumnWidth(0, 50)
+        self.hist_table.verticalHeader().setVisible(False)
+        self.hist_table.verticalHeader().setDefaultSectionSize(40)
+        self.hist_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.hist_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.hist_table.doubleClicked.connect(self._open_order)
+        layout.addWidget(self.hist_table)
+
+        self._load_history()
+
+        btn_close = QPushButton("Fechar")
+        btn_close.setFixedHeight(38)
+        btn_close.setCursor(Qt.PointingHandCursor)
+        btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #95a5a6; color: white;
+                padding: 8px 20px; border-radius: 4px;
+                font-size: 13px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #7f8c8d; }
+        """)
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close, alignment=Qt.AlignRight)
+
+    def _load_history(self):
+        import pandas as pd
+        self._orders = self.orders_controller.get_orders_by_customer(self.customer_name)
+        self.hist_table.setRowCount(len(self._orders))
+
+        for row, order in enumerate(self._orders):
+            id_item = QTableWidgetItem(str(order['id']))
+            id_item.setTextAlignment(Qt.AlignCenter)
+            self.hist_table.setItem(row, 0, id_item)
+
+            try:
+                date_str = pd.to_datetime(order['created_at']).strftime('%d/%m/%Y %H:%M')
+            except Exception:
+                date_str = '-'
+            self.hist_table.setItem(row, 1, QTableWidgetItem(date_str))
+
+            status_text = "ABERTA" if order['status'] == 'aberta' else "FECHADA"
+            status_item = QTableWidgetItem(status_text)
+            status_item.setTextAlignment(Qt.AlignCenter)
+            status_item.setForeground(Qt.darkGreen if order['status'] == 'aberta' else Qt.darkRed)
+            self.hist_table.setItem(row, 2, status_item)
+
+            total_item = QTableWidgetItem(f"R$ {order['total']:.2f}")
+            total_item.setTextAlignment(Qt.AlignCenter)
+            self.hist_table.setItem(row, 3, total_item)
+
+    def _open_order(self, index):
+        row = index.row()
+        if row >= len(self._orders):
+            return
+        order = self._orders[row]
+        dialog = OrderDetailDialog(self, order, self.orders_controller, self.products_controller)
+        dialog.exec()
+        self._load_history()
