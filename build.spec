@@ -13,6 +13,7 @@ a = Analysis(
         ('version.py', '.'),
     ],
     hiddenimports=[
+        'PySide6.QtCharts',
         'pandas',
         'pandas._libs.tslibs.np_datetime',
         'pandas._libs.tslibs.nattype',

@@ -7,8 +7,8 @@
 
 [Setup]
 AppName=Controle B2
-AppVersion=1.1.0
-AppVerName=Controle B2 v1.1.0
+AppVersion=1.2.0
+AppVerName=Controle B2 v1.2.0
 AppPublisher=Eduardo Souza
 AppPublisherURL=https://github.com/drdssouza/estoque-b2
 AppSupportURL=https://github.com/drdssouza/estoque-b2
@@ -28,7 +28,7 @@ AllowNoIcons=yes
 DontMergeDuplicateFiles=no
 
 OutputDir=dist_installer
-OutputBaseFilename=Controle-B2-Setup-1.1.0
+OutputBaseFilename=Controle-B2-Setup-1.2.0
 SetupIconFile=icon.ico
 
 Compression=lzma2/ultra64

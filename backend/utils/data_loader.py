@@ -83,23 +83,71 @@ class DataLoader:
                 df.to_parquet(filepath, index=False)
                 return df
 
+    def _migrate(self, df, migrations):
+        """Aplica migrações de colunas ausentes. migrations = {coluna: valor_default}"""
+        changed = False
+        for col, default in migrations.items():
+            if col not in df.columns:
+                df[col] = default
+                changed = True
+        return df, changed
+
     def load_products(self):
-        return self._safe_load(self.products_file, self._create_default_products)
+        df = self._safe_load(self.products_file, self._create_default_products)
+        df, changed = self._migrate(df, {
+            'id':             0,
+            'name':           '',
+            'category':       '',
+            'purchase_price': 0.0,
+            'sale_price':     0.0,
+            'minimum_stock':  0,
+            'current_stock':  0,
+            'active':         True,
+        })
+        if changed:
+            self.save_products(df)
+        return df
 
     def load_movements(self):
-        return self._safe_load(self.movements_file, self._create_default_movements)
+        df = self._safe_load(self.movements_file, self._create_default_movements)
+        df, changed = self._migrate(df, {
+            'id':            0,
+            'product_id':    0,
+            'movement_type': '',
+            'quantity':      0,
+            'created_at':    pd.NaT,
+            'note':          '',
+        })
+        if changed:
+            self.save_movements(df)
+        return df
 
     def load_orders(self):
         df = self._safe_load(self.orders_file, self._create_default_orders)
-        if 'phone' not in df.columns:
-            df['phone'] = ''
+        df, changed = self._migrate(df, {
+            'id':            0,
+            'customer_name': '',
+            'phone':         '',
+            'created_at':    pd.NaT,
+            'status':        '',
+            'total':         0.0,
+        })
+        if changed:
             self.save_orders(df)
         return df
 
     def load_order_items(self):
         df = self._safe_load(self.order_items_file, self._create_default_order_items)
-        if 'added_at' not in df.columns:
-            df['added_at'] = pd.NaT
+        df, changed = self._migrate(df, {
+            'id':         0,
+            'order_id':   0,
+            'product_id': 0,
+            'quantity':   0,
+            'unit_price': 0.0,
+            'subtotal':   0.0,
+            'added_at':   pd.NaT,
+        })
+        if changed:
             self.save_order_items(df)
         return df
 
