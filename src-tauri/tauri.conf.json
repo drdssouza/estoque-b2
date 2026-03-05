@@ -30,6 +30,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": "v1Compatible",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,7 +46,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc5NzJDN0REREQ3QjgzMzkKUldRNWczdmQzY2R5ZVZFM05XQW5iUlFCY3ZhRTFDMmpVSkZmOGVkbVdrSU9wcWVYTzFzeDF1TzgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU4REQzRUM4NkQxQTg4RjIKUldUeWlCcHR5RDdkNk9xcjROcEVONWg3aEd3VTBFSHpkSktuRlZEYVRSczJETVBWeE1QeU9qdjYK",
       "endpoints": [
         "https://github.com/drdssouza/estoque-b2/releases/latest/download/latest.json"
       ],
