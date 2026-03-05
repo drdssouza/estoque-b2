@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Eye, CheckCircle, Trash2, Receipt, Phone, AlertTriangle, ArrowRight } from 'lucide-react';
-import { getOrders, createOrder, closeOrder, deleteOrder, searchCustomers, updateOrderPhone, getOpenOrderByCustomerName } from '../lib/db';
+import { getOrders, createOrder, closeOrder, deleteOrder, searchCustomers, updateOrderPhone, getOpenOrderByCustomerName, getSetting } from '../lib/db';
 import { formatCurrency, formatDateTime } from '../lib/utils';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,6 +14,11 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { useAppStore } from '../store';
 import type { Order, Customer } from '../types';
 
+function daysSince(dateStr: string): number {
+  const d = new Date(dateStr.replace(' ', 'T'));
+  return Math.floor((Date.now() - d.getTime()) / 86_400_000);
+}
+
 const STATUS_OPTIONS = [
   { value: 'todas', label: 'Todos os status' },
   { value: 'aberta', label: 'Abertas' },
@@ -22,12 +27,13 @@ const STATUS_OPTIONS = [
 
 export default function Orders() {
   const navigate = useNavigate();
-  const { addToast } = useAppStore();
+  const { addToast, setStaleOrdersCount } = useAppStore();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todas');
   const [loading, setLoading] = useState(true);
+  const [staleDays, setStaleDays] = useState(3);
 
   const [newOpen, setNewOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
@@ -46,12 +52,22 @@ export default function Orders() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getOrders(search, statusFilter);
+      const [data, days] = await Promise.all([
+        getOrders(search, statusFilter),
+        getSetting('stale_order_days', '3'),
+      ]);
+      const threshold = parseInt(days) || 3;
+      setStaleDays(threshold);
       setOrders(data);
+      // Update sidebar badge: count open orders past threshold
+      const stale = data.filter(
+        (o) => o.status === 'aberta' && daysSince(o.created_at) >= threshold
+      ).length;
+      setStaleOrdersCount(stale);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [search, statusFilter, setStaleOrdersCount]);
 
   useEffect(() => {
     load();
@@ -178,6 +194,22 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* Stale orders banner */}
+      {(() => {
+        const staleCount = orders.filter(
+          (o) => o.status === 'aberta' && daysSince(o.created_at) >= staleDays
+        ).length;
+        return staleCount > 0 ? (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-warning-subtle border border-warning/30 rounded-xl">
+            <AlertTriangle size={14} className="text-warning shrink-0" />
+            <p className="text-xs text-warning flex-1">
+              <span className="font-bold">{staleCount}</span> comanda{staleCount > 1 ? 's' : ''} aberta{staleCount > 1 ? 's' : ''} há mais de{' '}
+              <span className="font-bold">{staleDays} dia{staleDays > 1 ? 's' : ''}</span> — verifique se precisam ser finalizadas ou cobradas.
+            </p>
+          </div>
+        ) : null;
+      })()}
+
       {/* Table */}
       <Card noPad>
         {/* Header row */}
@@ -206,17 +238,30 @@ export default function Orders() {
           />
         ) : (
           <div>
-            {orders.map((order, i) => (
+            {orders.map((order, i) => {
+              const age = daysSince(order.created_at);
+              const isStale = order.status === 'aberta' && age >= staleDays;
+              return (
               <div
                 key={order.id}
                 className={`grid grid-cols-[60px_1fr_100px_120px_160px_220px] gap-3 px-4 py-3 items-center transition-colors border-b border-border last:border-0 hover:bg-white/[0.03] ${
-                  i % 2 === 0 ? '' : 'bg-white/[0.02]'
+                  isStale
+                    ? 'bg-warning/[0.04] border-l-2 border-l-warning'
+                    : i % 2 === 0 ? '' : 'bg-white/[0.02]'
                 }`}
               >
                 <span className="text-xs text-muted font-mono">#{order.id}</span>
-                <span className="text-sm text-white font-medium truncate">
-                  {order.customer_name}
-                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm text-white font-medium truncate">
+                    {order.customer_name}
+                  </span>
+                  {isStale && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-bold text-warning bg-warning-subtle border border-warning/30 px-1.5 py-0.5 rounded-full shrink-0">
+                      <AlertTriangle size={8} />
+                      {age}d
+                    </span>
+                  )}
+                </div>
                 <div>
                   <Badge
                     variant={order.status === 'aberta' ? 'green' : 'gray'}
@@ -262,7 +307,8 @@ export default function Orders() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>

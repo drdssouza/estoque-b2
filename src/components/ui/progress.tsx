@@ -4,13 +4,14 @@ import { cn } from '../../lib/utils';
 interface ProgressProps {
   value: number; // 0-100
   className?: string;
-  color?: 'green' | 'yellow' | 'red';
+  color?: 'green' | 'yellow' | 'red' | 'blue';
 }
 
 const colors = {
   green: 'bg-primary',
   yellow: 'bg-warning',
   red: 'bg-danger',
+  blue: 'bg-info',
 };
 
 export function Progress({ value, className, color = 'green' }: ProgressProps) {

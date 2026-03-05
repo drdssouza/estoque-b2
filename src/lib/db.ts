@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { Product, Movement, Order, OrderItem, DashboardStats, Customer, ReportStats } from '../types';
+import type { Product, Movement, Order, OrderItem, DashboardStats, Customer, ReportStats, CustomerSpending, TopCustomer } from '../types';
 import { nowSqlite } from './utils';
 
 let _db: Database | null = null;
@@ -654,6 +654,42 @@ export async function seedDemoData(): Promise<void> {
   }
 }
 
+// ── Customer Spending ─────────────────────────────────────────────────────────
+
+export async function getCustomerSpending(name: string): Promise<CustomerSpending | null> {
+  if (!name.trim()) return null;
+  const orders = await db().select<Order[]>(
+    `SELECT * FROM orders WHERE LOWER(customer_name) LIKE LOWER(?) ORDER BY created_at DESC`,
+    [`%${name.toLowerCase()}%`]
+  );
+  if (!orders.length) return null;
+  const total = orders.reduce((sum, o) => sum + o.total, 0);
+  return {
+    customer_name: orders[0].customer_name,
+    total,
+    count: orders.length,
+    avg_ticket: total / orders.length,
+    orders,
+  };
+}
+
+export async function getTopCustomers(limit = 15, dateFrom?: string, dateTo?: string): Promise<TopCustomer[]> {
+  const hasFilter = !!(dateFrom && dateTo);
+  const dateClause = hasFilter ? ` AND date(created_at) >= ? AND date(created_at) <= ?` : '';
+  const params = hasFilter ? [dateFrom!, dateTo!, limit] : [limit];
+  return db().select<TopCustomer[]>(
+    `SELECT customer_name,
+            SUM(total) as total,
+            COUNT(*) as count
+     FROM orders
+     WHERE status = 'fechada'${dateClause}
+     GROUP BY LOWER(customer_name)
+     ORDER BY total DESC
+     LIMIT ?`,
+    params
+  );
+}
+
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 export async function getReportStats(dateFrom?: string, dateTo?: string): Promise<ReportStats> {
@@ -674,7 +710,7 @@ export async function getReportStats(dateFrom?: string, dateTo?: string): Promis
          JOIN products p ON oi.product_id = p.id
          JOIN orders o ON oi.order_id = o.id
          WHERE o.status='fechada'${closedDateFilter}
-         GROUP BY oi.product_id
+         GROUP BY LOWER(p.name)
          ORDER BY total_qty DESC
          LIMIT 10`,
         dp
@@ -730,7 +766,7 @@ export async function getReportStats(dateFrom?: string, dateTo?: string): Promis
          JOIN products p ON oi.product_id = p.id
          JOIN orders o ON oi.order_id = o.id
          WHERE o.status='fechada'
-         GROUP BY oi.product_id
+         GROUP BY LOWER(p.name)
          ORDER BY total_qty DESC
          LIMIT 10`
       ),

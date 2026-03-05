@@ -75,6 +75,20 @@ export interface Customer {
   created_at: string;
 }
 
+export interface CustomerSpending {
+  customer_name: string;
+  total: number;
+  count: number;
+  avg_ticket: number;
+  orders: Order[];
+}
+
+export interface TopCustomer {
+  customer_name: string;
+  total: number;
+  count: number;
+}
+
 export interface ReportStats {
   today: { total: number; count: number };
   week: { total: number; count: number };

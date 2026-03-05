@@ -26,7 +26,7 @@ const NAV = [
 ];
 
 export default function Sidebar() {
-  const { lowStockCount, addToast } = useAppStore();
+  const { lowStockCount, staleOrdersCount, addToast } = useAppStore();
 
   async function handleBackup() {
     try {
@@ -53,7 +53,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-sm font-bold text-white tracking-tight">CONTROLE B2</p>
-            <p className="text-[10px] text-muted">v2.0.0 — Arena B2</p>
+            <p className="text-[10px] text-muted">v2.0.1 — Arena B2</p>
           </div>
         </div>
       </div>
@@ -89,6 +89,14 @@ export default function Sidebar() {
                   <span className="flex items-center gap-1 text-[10px] font-bold text-warning bg-warning-subtle border border-warning/20 px-1.5 py-0.5 rounded-full">
                     <AlertTriangle size={9} />
                     {lowStockCount}
+                  </span>
+                )}
+
+                {/* Stale orders badge on Comandas */}
+                {to === '/orders' && staleOrdersCount > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-warning bg-warning-subtle border border-warning/20 px-1.5 py-0.5 rounded-full">
+                    <AlertTriangle size={9} />
+                    {staleOrdersCount}
                   </span>
                 )}
               </>

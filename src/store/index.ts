@@ -8,6 +8,10 @@ interface AppStore {
   lowStockCount: number;
   setLowStockCount: (n: number) => void;
 
+  // Stale orders badge
+  staleOrdersCount: number;
+  setStaleOrdersCount: (n: number) => void;
+
   // PIX key (cached)
   pixKey: string;
   setPixKey: (k: string) => void;
@@ -21,6 +25,9 @@ interface AppStore {
 export const useAppStore = create<AppStore>((set) => ({
   lowStockCount: 0,
   setLowStockCount: (n) => set({ lowStockCount: n }),
+
+  staleOrdersCount: 0,
+  setStaleOrdersCount: (n) => set({ staleOrdersCount: n }),
 
   pixKey: '',
   setPixKey: (k) => set({ pixKey: k }),

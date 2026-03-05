@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Key, HardDrive, Info, Check, Save } from 'lucide-react';
+import { Key, HardDrive, Info, Check, Save, Bell } from 'lucide-react';
 import { getSetting, setSetting } from '../lib/db';
 import { backupTimestamp } from '../lib/utils';
 import { invoke } from '@tauri-apps/api/core';
@@ -16,6 +16,10 @@ export default function Settings() {
   const [savingPix, setSavingPix] = useState(false);
   const [pixSaved, setPixSaved] = useState(false);
 
+  const [staleDays, setStaleDays] = useState('3');
+  const [savingStale, setSavingStale] = useState(false);
+  const [staleSaved, setStaleSaved] = useState(false);
+
   const [backingUp, setBackingUp] = useState(false);
 
   useEffect(() => {
@@ -27,6 +31,7 @@ export default function Settings() {
         setStoredPixKey(v);
       });
     }
+    getSetting('stale_order_days', '3').then(setStaleDays);
   }, [storedPixKey, setStoredPixKey]);
 
   async function handleSavePix() {
@@ -41,6 +46,22 @@ export default function Settings() {
       addToast(`Erro: ${e}`, 'error');
     } finally {
       setSavingPix(false);
+    }
+  }
+
+  async function handleSaveStale() {
+    const val = Math.max(1, Math.min(90, parseInt(staleDays) || 3));
+    setStaleDays(String(val));
+    setSavingStale(true);
+    try {
+      await setSetting('stale_order_days', String(val));
+      setStaleSaved(true);
+      addToast('Configuração salva!');
+      setTimeout(() => setStaleSaved(false), 2000);
+    } catch (e) {
+      addToast(`Erro: ${e}`, 'error');
+    } finally {
+      setSavingStale(false);
     }
   }
 
@@ -126,6 +147,42 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Stale order alert */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Bell size={14} className="text-warning" />
+            <CardTitle>Alerta de Comandas Antigas</CardTitle>
+          </div>
+        </CardHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Exibe um aviso visual nas comandas que estão abertas há mais de X dias, para facilitar o controle.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min="1"
+              max="90"
+              value={staleDays}
+              onChange={(e) => setStaleDays(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveStale()}
+              className="w-20 bg-bg border border-border rounded-lg px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-primary transition-colors"
+            />
+            <span className="text-sm text-muted">dia(s) aberta sem fechar</span>
+          </div>
+          <Button
+            variant={staleSaved ? 'primary' : 'secondary'}
+            size="md"
+            icon={staleSaved ? <Check size={14} /> : <Save size={14} />}
+            onClick={handleSaveStale}
+            isLoading={savingStale}
+          >
+            {staleSaved ? 'Salvo!' : 'Salvar'}
+          </Button>
+        </div>
+      </Card>
+
       {/* About */}
       <Card>
         <CardHeader>
@@ -142,7 +199,7 @@ export default function Settings() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">Versão</span>
-            <span className="text-xs text-primary font-semibold">v2.0.0</span>
+            <span className="text-xs text-primary font-semibold">v2.0.1</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">Desenvolvido por</span>
