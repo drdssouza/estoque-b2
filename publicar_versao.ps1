@@ -1,4 +1,4 @@
-# ── Controle B2 — Script de publicação de nova versão ──────────────────────────
+﻿# ── Controle B2 — Script de publicação de nova versão ──────────────────────────
 # Uso: ./publicar_versao.ps1
 # Requer: Node, Rust, VS Build Tools, gh CLI (GitHub CLI)
 
@@ -75,5 +75,10 @@ gh release create $TAG `
     "${JSON_PATH}#latest.json" `
     --title "Controle B2 $TAG" `
     --notes "Atualização automática disponível. O sistema irá notificar os usuários."
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Falha ao criar a release no GitHub. Os arquivos do build ja estao prontos na pasta nsis do bundle — rode 'gh auth login' e execute o script novamente."
+    exit 1
+}
 
 Write-Host "`nPublicado com sucesso! v$VERSION já está disponível para atualização automática." -ForegroundColor Green

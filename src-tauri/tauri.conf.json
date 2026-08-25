@@ -46,7 +46,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU4REQzRUM4NkQxQTg4RjIKUldUeWlCcHR5RDdkNk9xcjROcEVONWg3aEd3VTBFSHpkSktuRlZEYVRSczJETVBWeE1QeU9qdjYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdFOUFGNzNCNTE5NEREQzEKUldUQjNaUlJPL2VhZmg4Zkh6RTNqbXh0dVJjbVBsWGFlVUZGWVhLSG91VDlFdkdsaHUzWU5GU3UK",
       "endpoints": [
         "https://github.com/drdssouza/estoque-b2/releases/latest/download/latest.json"
       ],
