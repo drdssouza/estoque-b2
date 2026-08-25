@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Key, HardDrive, Info, Check, Save, Bell } from 'lucide-react';
-import { getSetting, setSetting } from '../lib/db';
-import { backupTimestamp } from '../lib/utils';
+import { Key, HardDrive, Info, Check, Save, Bell, RotateCcw, FileCheck2 } from 'lucide-react';
+import { getSetting, setSetting, checkpointDb, closeDb, readBackupSummary, initDb } from '../lib/db';
+import type { BackupSummary } from '../lib/db';
+import { backupTimestamp, formatDateTime } from '../lib/utils';
 import { invoke } from '@tauri-apps/api/core';
-import { save } from '@tauri-apps/plugin-dialog';
+import { getVersion } from '@tauri-apps/api/app';
+import { save, open } from '@tauri-apps/plugin-dialog';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { useAppStore } from '../store';
 
 export default function Settings() {
@@ -16,11 +19,17 @@ export default function Settings() {
   const [savingPix, setSavingPix] = useState(false);
   const [pixSaved, setPixSaved] = useState(false);
 
+  const [restoreFile, setRestoreFile] = useState<string | null>(null);
+  const [restoreSummary, setRestoreSummary] = useState<BackupSummary | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
   const [staleDays, setStaleDays] = useState('3');
   const [savingStale, setSavingStale] = useState(false);
   const [staleSaved, setStaleSaved] = useState(false);
 
   const [backingUp, setBackingUp] = useState(false);
+  const [appVersion, setAppVersion] = useState('');
 
   useEffect(() => {
     if (storedPixKey) {
@@ -32,6 +41,7 @@ export default function Settings() {
       });
     }
     getSetting('stale_order_days', '3').then(setStaleDays);
+    getVersion().then(setAppVersion).catch(() => { /* fora do Tauri */ });
   }, [storedPixKey, setStoredPixKey]);
 
   async function handleSavePix() {
@@ -77,12 +87,49 @@ export default function Settings() {
         setBackingUp(false);
         return;
       }
+      // Grava o WAL dentro do .db antes de copiar, senão o backup sai incompleto
+      await checkpointDb();
       await invoke('backup_database', { destPath: dest });
       addToast(`Backup salvo com sucesso!`);
     } catch (e) {
       addToast(`Erro ao fazer backup: ${e}`, 'error');
     } finally {
       setBackingUp(false);
+    }
+  }
+
+  async function pickRestoreFile() {
+    const picked = await open({
+      title: 'Escolher arquivo de backup',
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'Backup do Controle B2', extensions: ['db'] }],
+    });
+    if (typeof picked !== 'string') return;
+    setRestoreFile(picked);
+    setRestoreSummary(await readBackupSummary(picked));
+  }
+
+  async function handleRestore() {
+    if (!restoreFile) return;
+    setRestoring(true);
+    try {
+      // A conexão precisa cair antes de o arquivo ser trocado embaixo dela.
+      await closeDb();
+      await invoke('restore_database', {
+        srcPath: restoreFile,
+        stamp: backupTimestamp(),
+      });
+      addToast('Backup restaurado! Reiniciando o programa...');
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      await relaunch();
+    } catch (e) {
+      // Reabre o banco atual para o app continuar utilizável.
+      try { await initDb(); } catch { /* o reinício resolve */ }
+      addToast(`Erro ao restaurar: ${e}`, 'error');
+      setConfirmRestore(false);
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -147,6 +194,81 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Restaurar backup */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <RotateCcw size={14} className="text-warning" />
+            <CardTitle>Restaurar Backup</CardTitle>
+          </div>
+        </CardHeader>
+
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Traz de volta os dados de um arquivo de backup (.db). Use ao trocar de
+            computador ou depois de reinstalar o programa. Os dados atuais são
+            substituídos — mas uma cópia deles é guardada automaticamente antes.
+          </p>
+
+          {!restoreFile ? (
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<RotateCcw size={14} />}
+              onClick={pickRestoreFile}
+            >
+              Escolher arquivo de backup
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-white/[0.02] p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <FileCheck2 size={14} className="text-info shrink-0 mt-0.5" />
+                  <p className="text-xs text-white break-all">
+                    {restoreFile.split(/[\\/]/).pop()}
+                  </p>
+                </div>
+
+                {restoreSummary ? (
+                  <div className="pl-6 space-y-1">
+                    <p className="text-[11px] text-muted">
+                      Contém{' '}
+                      <span className="text-white font-semibold">{restoreSummary.orders}</span> comanda(s),{' '}
+                      <span className="text-white font-semibold">{restoreSummary.products}</span> produto(s) e{' '}
+                      <span className="text-white font-semibold">{restoreSummary.customers}</span> cliente(s).
+                    </p>
+                    {restoreSummary.lastOrderDate && (
+                      <p className="text-[11px] text-muted">
+                        Comanda mais recente: {formatDateTime(restoreSummary.lastOrderDate)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="pl-6 text-[11px] text-danger">
+                    Não consegui ler este arquivo. Confira se é mesmo um backup do Controle B2.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="ghost" size="md" onClick={() => { setRestoreFile(null); setRestoreSummary(null); }}>
+                  Escolher outro
+                </Button>
+                <Button
+                  variant="warning"
+                  size="md"
+                  icon={<RotateCcw size={14} />}
+                  onClick={() => setConfirmRestore(true)}
+                  disabled={!restoreSummary}
+                >
+                  Restaurar este backup
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Stale order alert */}
       <Card>
         <CardHeader>
@@ -199,7 +321,7 @@ export default function Settings() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">Versão</span>
-            <span className="text-xs text-primary font-semibold">v2.0.1</span>
+            <span className="text-xs text-primary font-semibold">{appVersion ? `v${appVersion}` : '—'}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">Desenvolvido por</span>
@@ -207,6 +329,20 @@ export default function Settings() {
           </div>
         </div>
       </Card>
+      <ConfirmDialog
+        open={confirmRestore}
+        onClose={() => setConfirmRestore(false)}
+        onConfirm={handleRestore}
+        variant="danger"
+        title="Restaurar este backup?"
+        message={
+          restoreSummary
+            ? `Os dados atuais serão substituídos pelos do backup (${restoreSummary.orders} comanda(s), ${restoreSummary.products} produto(s)). Uma cópia dos dados atuais é guardada automaticamente antes da troca. O programa vai reiniciar em seguida.`
+            : ''
+        }
+        confirmLabel="Restaurar e reiniciar"
+        isLoading={restoring}
+      />
     </div>
   );
 }

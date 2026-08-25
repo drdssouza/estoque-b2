@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 // ── Mock do plugin-sql (deve ser hoisted antes de qualquer import) ─────────────
-const { mockDb } = vi.hoisted(() => {
+const { mockDb, mockLoad } = vi.hoisted(() => {
   const mockDb = {
     execute: vi.fn().mockResolvedValue({ lastInsertId: 1, rowsAffected: 1 }),
     select: vi.fn().mockResolvedValue([]),
+    close: vi.fn().mockResolvedValue(true),
   };
-  return { mockDb };
+  const mockLoad = vi.fn().mockResolvedValue(mockDb);
+  return { mockDb, mockLoad };
 });
 
 vi.mock('@tauri-apps/plugin-sql', () => ({
   default: {
-    load: vi.fn().mockResolvedValue(mockDb),
+    load: mockLoad,
   },
 }));
 
@@ -34,6 +36,11 @@ import {
   addOrderItem,
   decrementOrderItem,
   removeAllItemsOfProduct,
+  readBackupSummary,
+  getOrderPayments,
+  getOrderPaidTotal,
+  addOrderPayment,
+  deleteOrderPayment,
   getMovements,
   addMovement,
   removeMovement,
@@ -69,6 +76,8 @@ beforeEach(() => {
   // Reseta contagem de chamadas (mantém implementação)
   mockDb.execute.mockClear();
   mockDb.select.mockClear();
+  mockDb.close.mockClear();
+  mockLoad.mockClear();
   // Defaults
   mockDb.execute.mockResolvedValue({ lastInsertId: 1, rowsAffected: 1 });
   mockDb.select.mockResolvedValue([]);
@@ -414,6 +423,146 @@ describe('removeAllItemsOfProduct', () => {
     expect(deleteCall).toBeDefined();
     expect(deleteCall![1]).toContain(5); // order_id
     expect(deleteCall![1]).toContain(3); // product_id
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORDER PAYMENTS (abatimentos / pagamentos parciais)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('getOrderPayments', () => {
+  it('busca pagamentos da comanda em ordem cronológica', async () => {
+    const pagamentos = [
+      { id: 1, order_id: 4, amount: 100, method: 'PIX', note: '', created_at: '2024-03-15 10:00:00' },
+    ];
+    mockSelectOnce(pagamentos);
+    const result = await getOrderPayments(4);
+    const [sql, params] = mockDb.select.mock.calls[0];
+    expect(sql).toContain('FROM order_payments');
+    expect(sql).toContain('order_id = ?');
+    expect(sql).toContain('ORDER BY created_at ASC');
+    expect(params).toContain(4);
+    expect(result).toEqual(pagamentos);
+  });
+
+  it('retorna lista vazia quando não há pagamentos', async () => {
+    mockSelectOnce([]);
+    expect(await getOrderPayments(9)).toEqual([]);
+  });
+});
+
+describe('getOrderPaidTotal', () => {
+  it('soma os pagamentos da comanda', async () => {
+    mockSelectOnce([{ paid: 175.5 }]);
+    expect(await getOrderPaidTotal(3)).toBe(175.5);
+  });
+
+  it('retorna 0 quando a comanda não tem pagamentos', async () => {
+    mockSelectOnce([]);
+    expect(await getOrderPaidTotal(3)).toBe(0);
+  });
+});
+
+describe('addOrderPayment', () => {
+  it('insere pagamento com valor, forma, observação e timestamp', async () => {
+    await addOrderPayment(7, 100, 'PIX', 'adiantamento');
+    const [sql, params] = mockDb.execute.mock.calls[0];
+    expect(sql).toContain('INSERT INTO order_payments');
+    expect(params).toContain(7);
+    expect(params).toContain(100);
+    expect(params).toContain('PIX');
+    expect(params).toContain('adiantamento');
+    expect(params[4] as string).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it('usa forma e observação vazias por padrão', async () => {
+    await addOrderPayment(7, 50);
+    const [, params] = mockDb.execute.mock.calls[0];
+    expect(params[2]).toBe('');
+    expect(params[3]).toBe('');
+  });
+
+  it('rejeita valor zero, negativo ou inválido', async () => {
+    await expect(addOrderPayment(1, 0)).rejects.toThrow();
+    await expect(addOrderPayment(1, -10)).rejects.toThrow();
+    await expect(addOrderPayment(1, NaN)).rejects.toThrow();
+    expect(mockDb.execute.mock.calls.length).toBe(0);
+  });
+});
+
+describe('deleteOrderPayment', () => {
+  it('remove apenas o pagamento informado', async () => {
+    await deleteOrderPayment(12);
+    const [sql, params] = mockDb.execute.mock.calls[0];
+    expect(sql).toContain('DELETE FROM order_payments');
+    expect(sql).toContain('WHERE id = ?');
+    expect(params).toContain(12);
+  });
+});
+
+describe('comandas com pagamentos parciais', () => {
+  it('getOrders traz a coluna paid somando os pagamentos', async () => {
+    mockSelectOnce([]);
+    await getOrders();
+    const [sql] = mockDb.select.mock.calls[0];
+    expect(sql).toContain('SUM(op.amount)');
+    expect(sql).toContain('as paid');
+  });
+
+  it('getOrderById traz a coluna paid', async () => {
+    mockSelectOnce([]);
+    await getOrderById(1);
+    const [sql] = mockDb.select.mock.calls[0];
+    expect(sql).toContain('as paid');
+  });
+
+  it('deleteOrder também apaga os pagamentos da comanda', async () => {
+    await deleteOrder(7);
+    const deletePayments = mockDb.execute.mock.calls.find(([sql]: [string]) =>
+      sql.includes('DELETE FROM order_payments')
+    );
+    expect(deletePayments).toBeDefined();
+    expect(deletePayments![1]).toContain(7);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESTAURAÇÃO DE BACKUP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('readBackupSummary', () => {
+  it('conta comandas, produtos e clientes do arquivo escolhido', async () => {
+    mockDb.select
+      .mockResolvedValueOnce([{ c: 34 }])
+      .mockResolvedValueOnce([{ c: 19 }])
+      .mockResolvedValueOnce([{ c: 12 }])
+      .mockResolvedValueOnce([{ d: '2026-03-01 20:00:00' }]);
+    const r = await readBackupSummary('C:/backups/controle_b2.db');
+    expect(r).toEqual({ orders: 34, products: 19, customers: 12, lastOrderDate: '2026-03-01 20:00:00' });
+  });
+
+  it('converte barras invertidas do Windows no caminho', async () => {
+    mockDb.select.mockResolvedValue([{ c: 0 }]);
+    await readBackupSummary('C:\\Users\\Eduardo\\Documents\\backup.db');
+    const [conn] = mockLoad.mock.calls[mockLoad.mock.calls.length - 1];
+    expect(conn).toBe('sqlite:C:/Users/Eduardo/Documents/backup.db');
+  });
+
+  it('devolve null quando o arquivo não tem as tabelas do Controle B2', async () => {
+    mockDb.select.mockRejectedValue(new Error('no such table: orders'));
+    expect(await readBackupSummary('C:/qualquer/outro.db')).toBeNull();
+  });
+
+  it('fecha a conexão do backup mesmo quando a leitura falha', async () => {
+    mockDb.select.mockRejectedValue(new Error('no such table: orders'));
+    await readBackupSummary('C:/qualquer/outro.db');
+    expect(mockDb.close).toHaveBeenCalled();
+  });
+
+  it('não deixa a conexão do backup aberta quando dá tudo certo', async () => {
+    mockDb.select.mockResolvedValue([{ c: 1 }]);
+    await readBackupSummary('C:/backups/ok.db');
+    expect(mockDb.close).toHaveBeenCalledTimes(1);
   });
 });
 

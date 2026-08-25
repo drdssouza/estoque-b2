@@ -8,6 +8,8 @@ import {
   cn,
   nowSqlite,
   backupTimestamp,
+  formatShortDateTime,
+  parseAmount,
 } from './utils';
 
 // ── formatCurrency ─────────────────────────────────────────────────────────────
@@ -158,6 +160,67 @@ describe('formatDate', () => {
         const ts = `2024-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')} 10:00:00`;
         expect(() => formatDate(ts)).not.toThrow();
       }
+    }
+  });
+});
+
+// ── formatShortDateTime ────────────────────────────────────────────────────────
+
+describe('formatShortDateTime', () => {
+  it('formata timestamp sqlite como "dd/mm às hh:mm"', () => {
+    const r = formatShortDateTime('2024-03-15 14:30:00');
+    expect(r).toContain('15/03');
+    expect(r).toContain('às');
+    expect(r).toContain('14:30');
+  });
+
+  it('retorna string vazia para entrada vazia', () => {
+    expect(formatShortDateTime('')).toBe('');
+  });
+
+  it('não lança exceção com data inválida', () => {
+    expect(() => formatShortDateTime('data-invalida')).not.toThrow();
+  });
+});
+
+// ── parseAmount ────────────────────────────────────────────────────────────────
+
+describe('parseAmount', () => {
+  it('lê valor com vírgula decimal (pt-BR)', () => {
+    expect(parseAmount('100,50')).toBe(100.5);
+  });
+
+  it('lê valor com ponto decimal', () => {
+    expect(parseAmount('100.50')).toBe(100.5);
+  });
+
+  it('lê valor com separador de milhar e vírgula decimal', () => {
+    expect(parseAmount('1.234,50')).toBe(1234.5);
+  });
+
+  it('ignora prefixo R$ e espaços', () => {
+    expect(parseAmount('R$ 80')).toBe(80);
+  });
+
+  it('lê inteiro simples', () => {
+    expect(parseAmount('300')).toBe(300);
+  });
+
+  it('retorna NaN para texto vazio ou sem números', () => {
+    expect(parseAmount('')).toBeNaN();
+    expect(parseAmount('abc')).toBeNaN();
+    expect(parseAmount('R$')).toBeNaN();
+  });
+
+  it('valor negativo é lido como negativo (rejeitado pela camada de dados)', () => {
+    expect(parseAmount('-50')).toBe(-50);
+  });
+
+  it('[STRESS] 10.000 valores aleatórios em formato pt-BR são lidos de volta', () => {
+    for (let i = 0; i < 10_000; i++) {
+      const valor = Math.round(Math.random() * 100_000) / 100;
+      const digitado = valor.toFixed(2).replace('.', ',');
+      expect(parseAmount(digitado)).toBeCloseTo(valor, 2);
     }
   });
 });

@@ -27,7 +27,20 @@ export interface Order {
   total: number;
   created_at: string;
   closed_at?: string | null;
+  /** Soma dos pagamentos parciais já registrados (vem das queries que fazem o JOIN) */
+  paid?: number;
 }
+
+export interface OrderPayment {
+  id: number;
+  order_id: number;
+  amount: number;
+  method: string;
+  note: string;
+  created_at: string;
+}
+
+export const PAYMENT_METHODS = ['PIX', 'Dinheiro', 'Cartão', 'Outro'] as const;
 
 export interface OrderItem {
   id: number;

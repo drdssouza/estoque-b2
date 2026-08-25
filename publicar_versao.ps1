@@ -4,6 +4,9 @@
 
 $KEY_FILE = "$env:USERPROFILE\.tauri\controle-b2.key"
 
+# Texto que o cliente vê na faixa de atualização — edite a cada release
+$NOTES = "Agora da para registrar pagamentos parciais nas comandas: quanto o cliente ja pagou, por qual forma e a que horas."
+
 if (-not (Test-Path $KEY_FILE)) {
     Write-Error "Chave privada não encontrada em $KEY_FILE"
     exit 1
@@ -36,8 +39,8 @@ $DOWNLOAD_URL = "https://github.com/drdssouza/estoque-b2/releases/download/$TAG/
 
 $latest = @{
     version  = $VERSION
-    notes    = "Controle B2 $TAG - Atualização disponível"
-    pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+    notes    = $NOTES
+    pub_date = ((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))
     platforms = @{
         "windows-x86_64" = @{
             signature = $SIG_CONTENT.Trim()
@@ -46,7 +49,11 @@ $latest = @{
     }
 } | ConvertTo-Json -Depth 5
 
-$latest | Out-File -FilePath $JSON_PATH -Encoding utf8
+# UTF-8 sem BOM: o Out-File do PowerShell 5.1 grava BOM e o updater do Tauri
+# rejeita o JSON, fazendo a atualização falhar sem nenhuma mensagem.
+# (caminho absoluto porque [System.IO.File] não enxerga o diretório do PowerShell)
+$JSON_FULL = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $JSON_PATH))
+[System.IO.File]::WriteAllText($JSON_FULL, $latest, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "Artefatos prontos:" -ForegroundColor Cyan
 Write-Host "  Installer: $SETUP"

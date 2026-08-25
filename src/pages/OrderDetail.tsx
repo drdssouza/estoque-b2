@@ -12,6 +12,8 @@ import {
   History,
   Phone,
   Clock,
+  HandCoins,
+  Wallet,
 } from 'lucide-react';
 import {
   getOrderById,
@@ -24,21 +26,35 @@ import {
   updateOrderPhone,
   getOrdersByCustomer,
   getSetting,
+  getOrderPayments,
+  addOrderPayment,
+  deleteOrderPayment,
 } from '../lib/db';
-import { formatCurrency, formatDateTime, nowSqlite } from '../lib/utils';
+import {
+  formatCurrency,
+  formatDateTime,
+  formatShortDateTime,
+  parseAmount,
+  nowSqlite,
+} from '../lib/utils';
 import { generateOrderPdf } from '../lib/pdf';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { open as openUrl } from '@tauri-apps/plugin-shell';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Select } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Dialog } from '../components/ui/dialog';
 import { Card } from '../components/ui/card';
+import { Progress } from '../components/ui/progress';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useAppStore } from '../store';
-import type { Order, OrderItem, Product, GroupedOrderItem } from '../types';
+import type { Order, OrderItem, OrderPayment, Product, GroupedOrderItem } from '../types';
+import { PAYMENT_METHODS } from '../types';
+
+const METHOD_OPTIONS = PAYMENT_METHODS.map((m) => ({ value: m, label: m }));
 
 function toTime(dt: string): string {
   return new Date(dt.replace(' ', 'T')).toLocaleTimeString('pt-BR', {
@@ -82,6 +98,7 @@ export default function OrderDetail() {
 
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<GroupedOrderItem[]>([]);
+  const [payments, setPayments] = useState<OrderPayment[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -93,6 +110,14 @@ export default function OrderDetail() {
 
   // Phone editing
   const [phone, setPhone] = useState('');
+
+  // Payments (abatimentos)
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<string>(PAYMENT_METHODS[0]);
+  const [payNote, setPayNote] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [confirmDeletePayment, setConfirmDeletePayment] = useState<OrderPayment | null>(null);
 
   // Dialogs
   const [confirmClose, setConfirmClose] = useState(false);
@@ -106,22 +131,33 @@ export default function OrderDetail() {
   const [pixKey, setPixKey] = useState('');
 
   const load = useCallback(async () => {
-    const [ord, rawItems, prods] = await Promise.all([
+    const [ord, rawItems, prods, pays] = await Promise.all([
       getOrderById(orderId),
       getOrderItems(orderId),
       getAllActiveProducts(),
+      getOrderPayments(orderId),
     ]);
     if (!ord) { navigate('/orders'); return; }
     setOrder(ord);
     setPhone(ord.phone ?? '');
     setItems(groupItems(rawItems));
     setProducts(prods);
+    setPayments(pays);
     setLoading(false);
   }, [orderId, navigate]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Totais de pagamento (abatimentos)
+  const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
+  const orderTotal = order?.total ?? 0;
+  const remaining = Math.max(0, orderTotal - paidTotal);
+  const isFullyPaid = payments.length > 0 && remaining <= 0.009;
+  const paidPercent = orderTotal > 0 ? (paidTotal / orderTotal) * 100 : 0;
+  const parsedPayAmount = parseAmount(payAmount);
+  const payPreview = Number.isFinite(parsedPayAmount) && parsedPayAmount > 0 ? parsedPayAmount : 0;
 
   const filteredProducts = itemSearch
     ? products.filter((p) => p.name.toLowerCase().includes(itemSearch.toLowerCase()))
@@ -160,6 +196,44 @@ export default function OrderDetail() {
     load();
   }
 
+  function openPayment() {
+    setPayAmount(remaining > 0 ? remaining.toFixed(2).replace('.', ',') : '');
+    setPayMethod(PAYMENT_METHODS[0]);
+    setPayNote('');
+    setPayOpen(true);
+  }
+
+  async function handleAddPayment() {
+    const amount = parseAmount(payAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      addToast('Informe um valor maior que zero.', 'error');
+      return;
+    }
+    setPaying(true);
+    try {
+      await addOrderPayment(orderId, Number(amount.toFixed(2)), payMethod, payNote.trim());
+      addToast(`Pagamento de ${formatCurrency(amount)} registrado!`);
+      setPayOpen(false);
+      load();
+    } catch (e) {
+      addToast(`Erro: ${e}`, 'error');
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function handleDeletePayment() {
+    if (!confirmDeletePayment) return;
+    try {
+      await deleteOrderPayment(confirmDeletePayment.id);
+      addToast('Pagamento removido');
+      setConfirmDeletePayment(null);
+      load();
+    } catch (e) {
+      addToast(`Erro: ${e}`, 'error');
+    }
+  }
+
   async function handlePhoneBlur() {
     if (order && phone !== order.phone) {
       await updateOrderPhone(orderId, phone);
@@ -184,7 +258,7 @@ export default function OrderDetail() {
     if (!order) return;
     try {
       const pk = storedPixKey || (await getSetting('pix_key'));
-      const bytes = generateOrderPdf(order, items, pk);
+      const bytes = generateOrderPdf(order, items, pk, payments);
       const dest = await save({
         title: 'Salvar PDF da Comanda',
         defaultPath: `comanda_${order.id}_${order.customer_name.replace(/\s+/g, '_')}.pdf`,
@@ -208,10 +282,11 @@ export default function OrderDetail() {
 
   async function sendWhatsApp() {
     if (!order) return;
+    const isOpenOrder = order.status === 'aberta';
     const lines = [
       `Olá, *${order.customer_name}*! 👋`,
       '',
-      `📋 *Comanda #${order.id}*`,
+      `📋 *Comanda #${order.id}* ${isOpenOrder ? '(aberta)' : '(fechada)'}`,
       '',
       ...items.map(
         (i) =>
@@ -220,7 +295,24 @@ export default function OrderDetail() {
       '',
       `💰 *Total: ${formatCurrency(order.total)}*`,
     ];
-    if (pixKey) {
+
+    if (payments.length > 0) {
+      lines.push('', `✅ *Valor já acertado: ${formatCurrency(paidTotal)}*`);
+      lines.push(
+        ...payments.map(
+          (p) =>
+            `   ↳ ${formatShortDateTime(p.created_at)}${p.method ? ` (${p.method})` : ''} — ${formatCurrency(p.amount)}`
+        )
+      );
+      lines.push(
+        '',
+        remaining > 0.009
+          ? `🔴 *Falta pagar: ${formatCurrency(remaining)}*`
+          : '🎉 *Comanda quitada — nada a pagar!*'
+      );
+    }
+
+    if (pixKey && remaining > 0.009) {
       lines.push('', `🔑 PIX: \`${pixKey}\``);
     }
     const text = encodeURIComponent(lines.join('\n'));
@@ -332,6 +424,23 @@ export default function OrderDetail() {
             <p className="text-3xl font-bold text-primary">
               {formatCurrency(order.total)}
             </p>
+            {payments.length > 0 && (
+              <div className="mt-2 space-y-0.5">
+                <p className="text-xs text-info">
+                  Já pago:{' '}
+                  <span className="font-semibold">{formatCurrency(paidTotal)}</span>
+                </p>
+                <p
+                  className={`text-sm font-bold ${
+                    isFullyPaid ? 'text-primary' : 'text-warning'
+                  }`}
+                >
+                  {isFullyPaid
+                    ? 'Comanda quitada'
+                    : `Falta ${formatCurrency(remaining)}`}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </Card>
@@ -500,6 +609,111 @@ export default function OrderDetail() {
         </div>
       </Card>
 
+      {/* Pagamentos parciais (abatimentos) */}
+      <Card noPad>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
+          <div>
+            <p className="text-sm font-semibold text-white flex items-center gap-2">
+              <Wallet size={14} className="text-info" />
+              Pagamentos recebidos
+            </p>
+            <p className="text-[11px] text-muted mt-0.5">
+              Valores que o cliente já acertou desta comanda
+            </p>
+          </div>
+          <Button
+            variant="info"
+            size="sm"
+            icon={<HandCoins size={14} />}
+            onClick={openPayment}
+          >
+            Registrar pagamento
+          </Button>
+        </div>
+
+        {payments.length === 0 ? (
+          <p className="px-5 py-5 text-xs text-muted text-center">
+            Nenhum pagamento registrado — o cliente ainda não acertou nada desta comanda.
+          </p>
+        ) : (
+          <div>
+            <div className="grid grid-cols-[1fr_110px_120px_60px] gap-3 px-5 py-2.5 border-b border-border text-[10px] font-semibold uppercase tracking-wider text-muted">
+              <span>Quando</span>
+              <span>Forma</span>
+              <span className="text-right">Valor</span>
+              <span className="text-center">Remover</span>
+            </div>
+            {payments.map((p, i) => (
+              <div
+                key={p.id}
+                className={`grid grid-cols-[1fr_110px_120px_60px] gap-3 px-5 py-3 items-center border-b border-border last:border-0 ${
+                  i % 2 === 0 ? '' : 'bg-white/[0.02]'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white">{formatShortDateTime(p.created_at)}</p>
+                  {p.note && (
+                    <p className="text-[11px] text-muted truncate mt-0.5">{p.note}</p>
+                  )}
+                </div>
+                <div>{p.method && <Badge variant="blue">{p.method}</Badge>}</div>
+                <span className="text-sm text-right font-semibold text-info">
+                  − {formatCurrency(p.amount)}
+                </span>
+                <div className="flex justify-center">
+                  <button
+                    className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger-subtle transition-colors"
+                    onClick={() => setConfirmDeletePayment(p)}
+                    title="Remover pagamento"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Resumo do acerto */}
+        <div className="border-t border-border">
+          <div className="grid grid-cols-3">
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
+                Total da comanda
+              </p>
+              <p className="text-lg font-bold text-white">{formatCurrency(orderTotal)}</p>
+            </div>
+            <div className="px-5 py-4 border-l border-border">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
+                Já pago
+              </p>
+              <p className="text-lg font-bold text-info">{formatCurrency(paidTotal)}</p>
+            </div>
+            <div
+              className={`px-5 py-4 border-l border-border ${
+                isFullyPaid ? 'bg-primary-subtle' : 'bg-warning-subtle'
+              }`}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
+                Falta pagar
+              </p>
+              <p
+                className={`text-lg font-bold ${
+                  isFullyPaid ? 'text-primary' : 'text-warning'
+                }`}
+              >
+                {isFullyPaid ? 'Quitada 🎉' : formatCurrency(remaining)}
+              </p>
+            </div>
+          </div>
+          {orderTotal > 0 && (
+            <div className="px-5 pb-4">
+              <Progress value={paidPercent} color={isFullyPaid ? 'green' : 'blue'} />
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Action buttons */}
       <div className="flex items-center gap-3">
         <Button
@@ -541,9 +755,134 @@ export default function OrderDetail() {
         onConfirm={handleClose}
         variant="warning"
         title="Fechar comanda?"
-        message={`O estoque de ${items.length} produto(s) será descontado automaticamente. Esta ação não pode ser desfeita.`}
+        message={`O estoque de ${items.length} produto(s) será descontado automaticamente.${
+          remaining > 0.009 && payments.length > 0
+            ? ` Atenção: ainda faltam ${formatCurrency(remaining)} a receber desta comanda.`
+            : ''
+        } Esta ação não pode ser desfeita.`}
         confirmLabel="Fechar comanda"
         isLoading={closing}
+      />
+
+      {/* Registrar pagamento */}
+      <Dialog
+        open={payOpen}
+        onClose={() => setPayOpen(false)}
+        title="Registrar pagamento"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-white/[0.02] px-3 py-2.5 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted">Total da comanda</span>
+              <span className="text-white font-semibold">{formatCurrency(orderTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted">Já pago</span>
+              <span className="text-info font-semibold">{formatCurrency(paidTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted">Falta pagar</span>
+              <span className="text-warning font-semibold">{formatCurrency(remaining)}</span>
+            </div>
+          </div>
+
+          <Input
+            label="Valor recebido (R$)"
+            value={payAmount}
+            onChange={(e) => setPayAmount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddPayment();
+            }}
+            placeholder="0,00"
+            inputMode="decimal"
+            autoFocus
+          />
+
+          {remaining > 0.009 && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 py-1.5 rounded-lg border border-border text-xs text-muted hover:text-white hover:bg-white/5 transition-colors"
+                onClick={() => setPayAmount((remaining / 2).toFixed(2).replace('.', ','))}
+              >
+                Metade ({formatCurrency(remaining / 2)})
+              </button>
+              <button
+                type="button"
+                className="flex-1 py-1.5 rounded-lg border border-border text-xs text-muted hover:text-white hover:bg-white/5 transition-colors"
+                onClick={() => setPayAmount(remaining.toFixed(2).replace('.', ','))}
+              >
+                Tudo ({formatCurrency(remaining)})
+              </button>
+            </div>
+          )}
+
+          <Select
+            label="Forma de pagamento"
+            value={payMethod}
+            onChange={(e) => setPayMethod(e.target.value)}
+            options={METHOD_OPTIONS}
+          />
+
+          <Input
+            label="Observação (opcional)"
+            value={payNote}
+            onChange={(e) => setPayNote(e.target.value)}
+            placeholder="Ex: adiantamento, pago pelo amigo..."
+          />
+
+          {payPreview > 0 && (
+            payPreview > remaining + 0.009 ? (
+              <p className="text-xs text-warning">
+                Este valor passa {formatCurrency(payPreview - remaining)} do que falta pagar.
+                Confira antes de registrar.
+              </p>
+            ) : (
+              <p className="text-xs text-muted">
+                Depois deste pagamento vão faltar{' '}
+                <span className="text-white font-semibold">
+                  {formatCurrency(Math.max(0, remaining - payPreview))}
+                </span>
+                .
+              </p>
+            )
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              className="flex-1"
+              onClick={() => setPayOpen(false)}
+              disabled={paying}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="info"
+              className="flex-1"
+              icon={<HandCoins size={15} />}
+              onClick={handleAddPayment}
+              isLoading={paying}
+            >
+              Registrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Remover pagamento */}
+      <ConfirmDialog
+        open={!!confirmDeletePayment}
+        onClose={() => setConfirmDeletePayment(null)}
+        onConfirm={handleDeletePayment}
+        title="Remover pagamento?"
+        message={
+          confirmDeletePayment
+            ? `O pagamento de ${formatCurrency(confirmDeletePayment.amount)} registrado em ${formatShortDateTime(confirmDeletePayment.created_at)} será excluído e voltará a contar como valor em aberto.`
+            : ''
+        }
+        confirmLabel="Remover"
       />
 
       {/* WhatsApp dialog */}
@@ -604,9 +943,22 @@ export default function OrderDetail() {
                   </Badge>
                   <span className="text-xs text-muted">{formatDateTime(o.created_at)}</span>
                 </div>
-                <span className="text-sm font-semibold text-white">
-                  {formatCurrency(o.total)}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-semibold text-white">
+                    {formatCurrency(o.total)}
+                  </span>
+                  {!!o.paid && o.paid > 0.009 && (
+                    <p
+                      className={`text-[10px] ${
+                        o.total - o.paid > 0.009 ? 'text-warning' : 'text-primary'
+                      }`}
+                    >
+                      {o.total - o.paid > 0.009
+                        ? `falta ${formatCurrency(o.total - o.paid)}`
+                        : 'quitada'}
+                    </p>
+                  )}
+                </div>
               </button>
             ))
           )}

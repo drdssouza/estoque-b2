@@ -213,7 +213,7 @@ export default function Orders() {
       {/* Table */}
       <Card noPad>
         {/* Header row */}
-        <div className="grid grid-cols-[60px_1fr_100px_120px_160px_220px] gap-3 px-4 py-3 border-b border-border">
+        <div className="grid grid-cols-[60px_1fr_100px_150px_160px_220px] gap-3 px-4 py-3 border-b border-border">
           {['ID', 'Cliente', 'Status', 'Total', 'Data / Hora', 'Ações'].map((h) => (
             <p key={h} className="text-[10px] font-semibold uppercase tracking-wider text-muted">
               {h}
@@ -244,7 +244,7 @@ export default function Orders() {
               return (
               <div
                 key={order.id}
-                className={`grid grid-cols-[60px_1fr_100px_120px_160px_220px] gap-3 px-4 py-3 items-center transition-colors border-b border-border last:border-0 hover:bg-white/[0.03] ${
+                className={`grid grid-cols-[60px_1fr_100px_150px_160px_220px] gap-3 px-4 py-3 items-center transition-colors border-b border-border last:border-0 hover:bg-white/[0.03] ${
                   isStale
                     ? 'bg-warning/[0.04] border-l-2 border-l-warning'
                     : i % 2 === 0 ? '' : 'bg-white/[0.02]'
@@ -270,9 +270,25 @@ export default function Orders() {
                     {order.status === 'aberta' ? 'ABERTA' : 'FECHADA'}
                   </Badge>
                 </div>
-                <span className="text-sm font-semibold text-white">
-                  {formatCurrency(order.total)}
-                </span>
+                <div className="min-w-0">
+                  <span className="text-sm font-semibold text-white">
+                    {formatCurrency(order.total)}
+                  </span>
+                  {!!order.paid && order.paid > 0.009 && (
+                    <div className="mt-0.5 leading-tight">
+                      <p className="text-[10px] text-info">
+                        pago {formatCurrency(order.paid)}
+                      </p>
+                      {order.total - order.paid > 0.009 ? (
+                        <p className="text-[10px] font-semibold text-warning">
+                          falta {formatCurrency(order.total - order.paid)}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] font-semibold text-primary">quitada</p>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <span className="text-xs text-muted">{formatDateTime(order.created_at)}</span>
 
                 <div className="flex items-center gap-1.5">

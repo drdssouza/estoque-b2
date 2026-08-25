@@ -1,12 +1,13 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Order, GroupedOrderItem } from '../types';
-import { formatCurrency, formatDateTime } from './utils';
+import type { Order, GroupedOrderItem, OrderPayment } from '../types';
+import { formatCurrency, formatDateTime, formatShortDateTime } from './utils';
 
 export function generateOrderPdf(
   order: Order,
   items: GroupedOrderItem[],
-  pixKey: string
+  pixKey: string,
+  payments: OrderPayment[] = []
 ): Uint8Array {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
@@ -99,12 +100,50 @@ export function generateOrderPdf(
     margin: { left: 15, right: 15 },
   });
 
+  const lastY = () =>
+    (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+
+  // ── Pagamentos recebidos (abatimentos) ────────────────────────────────────
+  const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
+  const remaining = Math.max(0, order.total - paidTotal);
+
+  if (payments.length > 0) {
+    autoTable(doc, {
+      startY: lastY() + 8,
+      head: [['Pagamentos recebidos', 'Forma', 'Valor pago']],
+      body: payments.map((p) => [
+        formatShortDateTime(p.created_at) + (p.note ? ` — ${p.note}` : ''),
+        p.method || '—',
+        formatCurrency(p.amount),
+      ]),
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: white,
+        fontStyle: 'bold',
+        fontSize: 9,
+      },
+      bodyStyles: { fontSize: 9, textColor: [30, 30, 30] },
+      alternateRowStyles: { fillColor: [248, 248, 248] },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { halign: 'center', cellWidth: 30 },
+        2: { halign: 'right', cellWidth: 35 },
+      },
+      margin: { left: 15, right: 15 },
+    });
+  }
+
   // ── Total ─────────────────────────────────────────────────────────────────
-  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } })
-    .lastAutoTable.finalY;
+  const pageH = doc.internal.pageSize.getHeight();
+  const blockH = payments.length > 0 ? 34 : 18;
+  let finalY = lastY();
+  if (finalY + blockH + 30 > pageH) {
+    doc.addPage();
+    finalY = 10;
+  }
 
   doc.setFillColor(...dark);
-  doc.rect(0, finalY + 4, pageW, 18, 'F');
+  doc.rect(0, finalY + 4, pageW, blockH, 'F');
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
@@ -117,8 +156,26 @@ export function generateOrderPdf(
     align: 'right',
   });
 
+  if (payments.length > 0) {
+    doc.setFontSize(9);
+    doc.setTextColor(...white);
+    doc.text('VALOR JÁ PAGO', 15, finalY + 23);
+    doc.text(`- ${formatCurrency(paidTotal)}`, pageW - 15, finalY + 23, {
+      align: 'right',
+    });
+
+    doc.setFontSize(11);
+    doc.setTextColor(...(remaining > 0.009 ? ([250, 204, 21] as [number, number, number]) : green));
+    doc.text(remaining > 0.009 ? 'FALTA PAGAR' : 'COMANDA QUITADA', 15, finalY + 32);
+    doc.text(formatCurrency(remaining), pageW - 15, finalY + 32, {
+      align: 'right',
+    });
+  }
+
+  finalY = finalY + blockH - 18;
+
   // ── PIX footer ────────────────────────────────────────────────────────────
-  if (pixKey) {
+  if (pixKey && remaining > 0.009) {
     const footerY = finalY + 32;
     doc.setFillColor(245, 245, 245);
     doc.roundedRect(15, footerY, pageW - 30, 20, 3, 3, 'F');

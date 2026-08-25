@@ -33,6 +33,31 @@ export function formatDate(dt: string): string {
   }
 }
 
+/** Data/hora curta para mensagens e listas: "25/08 às 14:30" */
+export function formatShortDateTime(dt: string): string {
+  if (!dt) return '';
+  try {
+    const d = new Date(dt.replace(' ', 'T'));
+    const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `${date} às ${time}`;
+  } catch {
+    return dt;
+  }
+}
+
+/** Converte o que o usuário digitou ("1.234,50", "100.50", "R$ 80") em número. NaN se inválido. */
+export function parseAmount(input: string): number {
+  const clean = String(input).replace(/[^\d.,-]/g, '').trim();
+  if (!clean) return NaN;
+  // pt-BR: vírgula é o separador decimal, ponto é separador de milhar
+  const normalized = clean.includes(',')
+    ? clean.replace(/\./g, '').replace(',', '.')
+    : clean;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 export function getStockLevel(current: number, minimum: number): StockLevel {
   if (minimum === 0) return 'ok';
   const ratio = current / minimum;

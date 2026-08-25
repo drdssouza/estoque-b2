@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { Product, Movement, Order, OrderItem, DashboardStats, Customer, ReportStats, CustomerSpending, TopCustomer } from '../types';
+import type { Product, Movement, Order, OrderItem, OrderPayment, DashboardStats, Customer, ReportStats, CustomerSpending, TopCustomer } from '../types';
 import { nowSqlite } from './utils';
 
 let _db: Database | null = null;
@@ -50,6 +50,19 @@ export async function initDb(): Promise<void> {
     )
   `);
   await _db.execute(`
+    CREATE TABLE IF NOT EXISTS order_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      method TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_at TEXT NOT NULL
+    )
+  `);
+  await _db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_order_payments_order ON order_payments(order_id)
+  `);
+  await _db.execute(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL DEFAULT ''
@@ -76,6 +89,50 @@ export async function initDb(): Promise<void> {
 function db(): Database {
   if (!_db) throw new Error('Banco de dados não inicializado');
   return _db;
+}
+
+/** Fecha a conexão com o banco. Necessário antes de substituir o arquivo. */
+export async function closeDb(): Promise<void> {
+  if (!_db) return;
+  await _db.close();
+  _db = null;
+}
+
+export interface BackupSummary {
+  orders: number;
+  products: number;
+  customers: number;
+  lastOrderDate: string | null;
+}
+
+/**
+ * Abre um arquivo de backup só para contar o que tem dentro, sem tocar no banco
+ * em uso — serve para o usuário confirmar que escolheu o arquivo certo.
+ * Devolve null se o arquivo não for um banco do Controle B2.
+ */
+export async function readBackupSummary(path: string): Promise<BackupSummary | null> {
+  let conn: Database | null = null;
+  try {
+    conn = await Database.load(`sqlite:${path.replace(/\\/g, '/')}`);
+    const [orders, products, customers, last] = await Promise.all([
+      conn.select<{ c: number }[]>('SELECT COUNT(*) as c FROM orders'),
+      conn.select<{ c: number }[]>('SELECT COUNT(*) as c FROM products'),
+      conn.select<{ c: number }[]>('SELECT COUNT(*) as c FROM customers'),
+      conn.select<{ d: string }[]>('SELECT MAX(created_at) as d FROM orders'),
+    ]);
+    return {
+      orders: orders[0]?.c ?? 0,
+      products: products[0]?.c ?? 0,
+      customers: customers[0]?.c ?? 0,
+      lastOrderDate: last[0]?.d ?? null,
+    };
+  } catch {
+    return null;
+  } finally {
+    if (conn) {
+      try { await conn.close(); } catch { /* já fechado */ }
+    }
+  }
 }
 
 // ── Products ─────────────────────────────────────────────────────────────────
@@ -151,15 +208,18 @@ export async function getLowStockProducts(): Promise<Product[]> {
 
 // ── Orders ───────────────────────────────────────────────────────────────────
 
+/** Subquery reutilizável: soma dos pagamentos parciais da comanda */
+const PAID_SUBQUERY = `COALESCE((SELECT SUM(op.amount) FROM order_payments op WHERE op.order_id = o.id), 0) as paid`;
+
 export async function getOrders(search = '', status = ''): Promise<Order[]> {
-  let query = 'SELECT * FROM orders WHERE 1=1';
+  let query = `SELECT o.*, ${PAID_SUBQUERY} FROM orders o WHERE 1=1`;
   const params: unknown[] = [];
   if (search) {
-    query += ' AND LOWER(customer_name) LIKE ?';
+    query += ' AND LOWER(o.customer_name) LIKE ?';
     params.push(`%${search.toLowerCase()}%`);
   }
   if (status && status !== 'todas') {
-    query += ' AND status = ?';
+    query += ' AND o.status = ?';
     params.push(status);
   }
   query += ' ORDER BY created_at DESC';
@@ -168,7 +228,7 @@ export async function getOrders(search = '', status = ''): Promise<Order[]> {
 
 export async function getOrderById(id: number): Promise<Order | null> {
   const rows = await db().select<Order[]>(
-    'SELECT * FROM orders WHERE id = ?',
+    `SELECT o.*, ${PAID_SUBQUERY} FROM orders o WHERE o.id = ?`,
     [id]
   );
   return rows[0] ?? null;
@@ -220,6 +280,7 @@ export async function closeOrder(id: number): Promise<void> {
 
 export async function deleteOrder(id: number): Promise<void> {
   await db().execute('DELETE FROM order_items WHERE order_id = ?', [id]);
+  await db().execute('DELETE FROM order_payments WHERE order_id = ?', [id]);
   await db().execute('DELETE FROM orders WHERE id = ?', [id]);
 }
 
@@ -240,7 +301,7 @@ export async function getOpenOrderByCustomerName(name: string): Promise<Order | 
 
 export async function getOrdersByCustomer(name: string): Promise<Order[]> {
   return db().select<Order[]>(
-    'SELECT * FROM orders WHERE customer_name = ? ORDER BY created_at DESC',
+    `SELECT o.*, ${PAID_SUBQUERY} FROM orders o WHERE o.customer_name = ? ORDER BY created_at DESC`,
     [name]
   );
 }
@@ -316,6 +377,44 @@ export async function removeAllItemsOfProduct(
   await recalcOrderTotal(orderId);
 }
 
+// ── Order Payments (abatimentos / pagamentos parciais) ───────────────────────
+
+export async function getOrderPayments(orderId: number): Promise<OrderPayment[]> {
+  return db().select<OrderPayment[]>(
+    'SELECT * FROM order_payments WHERE order_id = ? ORDER BY created_at ASC, id ASC',
+    [orderId]
+  );
+}
+
+export async function getOrderPaidTotal(orderId: number): Promise<number> {
+  const rows = await db().select<{ paid: number }[]>(
+    'SELECT COALESCE(SUM(amount), 0) as paid FROM order_payments WHERE order_id = ?',
+    [orderId]
+  );
+  return rows[0]?.paid ?? 0;
+}
+
+export async function addOrderPayment(
+  orderId: number,
+  amount: number,
+  method = '',
+  note = ''
+): Promise<void> {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Informe um valor maior que zero.');
+  }
+  const now = nowSqlite();
+  await db().execute(
+    `INSERT INTO order_payments (order_id, amount, method, note, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [orderId, amount, method, note, now]
+  );
+}
+
+export async function deleteOrderPayment(id: number): Promise<void> {
+  await db().execute('DELETE FROM order_payments WHERE id = ?', [id]);
+}
+
 // ── Movements ────────────────────────────────────────────────────────────────
 
 export async function getMovements(): Promise<
@@ -378,6 +477,20 @@ export async function setSetting(key: string, value: string): Promise<void> {
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     [key, value]
   );
+}
+
+/**
+ * Força o SQLite a gravar o conteúdo do WAL dentro do arquivo .db.
+ * Obrigatório antes de copiar o banco: sem isso, o backup pode sair sem os
+ * dados mais recentes (que ainda estariam apenas no arquivo -wal).
+ */
+export async function checkpointDb(): Promise<void> {
+  try {
+    // O pragma devolve uma linha (busy, log, checkpointed) — por isso select.
+    await db().select('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch {
+    await db().execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  }
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
